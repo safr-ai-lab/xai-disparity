@@ -1,6 +1,6 @@
 from sklearn.linear_model import LogisticRegression
 
-
+# This class sourced from the gerryfair repo
 class RegOracle:
     """Class RegOracle, linear threshold classifier."""
 
@@ -21,16 +21,20 @@ class RegOracle:
         reg1 = self.b1
         n = x.shape[0]
         y = []
+        total_cost = 0
         for i in range(n):
             x_i = x.iloc[i, :]
             x_i = x_i.values.reshape(1, -1)
             c_0 = reg0.predict(x_i)
             c_1 = reg1.predict(x_i)
             y_i = int(c_1 < c_0)
+            cost = min(c_0, c_1)
             if not self.minimize:
                 y_i = 1 - y_i
+                cost = max(c_0, c_1)
             y.append(y_i)
-        return y
+            total_cost += cost
+        return y, total_cost
 
 
 class ZeroPredictor:
