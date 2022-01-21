@@ -1,5 +1,4 @@
-from sklearn.linear_model import LogisticRegression
-
+from sklearn.linear_model import LinearRegression
 # This class sourced from the gerryfair repo
 class RegOracle:
     """Class RegOracle, linear threshold classifier."""
@@ -23,17 +22,15 @@ class RegOracle:
         y = []
         total_cost = 0
         for i in range(n):
-            x_i = x.iloc[i, :]
-            x_i = x_i.values.reshape(1, -1)
-            c_0 = reg0.predict(x_i)
-            c_1 = reg1.predict(x_i)
+            c_0 = reg0.predict([x[i][:-1]])
+            c_1 = reg1.predict([x[i][:-1]])
             y_i = int(c_1 < c_0)
             cost = min(c_0, c_1)
             if not self.minimize:
                 y_i = 1 - y_i
                 cost = max(c_0, c_1)
             y.append(y_i)
-            total_cost += cost
+            total_cost += cost[0]
         return y, total_cost
 
 
@@ -46,7 +43,7 @@ class ZeroPredictor:
         """
         returns a vector of all 0 predictions
         """
-        return [0]*x
+        return [0 for _ in range(len(x))]
 
     @staticmethod
     def fit(_, __):
@@ -59,4 +56,4 @@ class ZeroPredictor:
         return
 
 
-CostPredictor = LogisticRegression
+CostPredictor = LinearRegression
