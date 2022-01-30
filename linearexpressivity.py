@@ -1,7 +1,6 @@
 import torch
 from torch.special import expit as sigmoid
-from torch.nn.functional import one_hot
-from torch.autograd import Function
+from torch.optim import SGD
 
 x = torch.tensor([[1.,0.],[0.,1.], [1.,1.]], requires_grad=True)
 y = torch.tensor([[1.25],[0.58], [2.47]], requires_grad=True)
@@ -19,21 +18,25 @@ def loss_fn_generator(feature_num):
         diag = torch.diag(one_d)
         x_t = torch.t(x)
         denom = torch.inverse(x_t @ diag @ x)
-        print(x_t @ diag @ y)
-        print(denom @ (x_t @ diag @ y))
-        """
-        diag = torch.diag(one_d)
-        denom = torch.inverse(x @ diag @ x_t)
-        full_tensor = denom @ (x_t @ diag @ y)
-        return basis @ full_tensor"""
         return basis @ (denom @ (x_t @ diag @ y))
 
     return loss_fn
 
 
-loss = loss_fn_generator(0)
-params=torch.tensor([1.,10.], requires_grad=True)
-res = loss(params)
-res.backward()
-
-print(params.grad)
+params = torch.randn(x.shape[1], requires_grad=True)
+optim = SGD(params=[params], lr=0.05)
+errors_and_weights = []
+for feature_num in range(x.shape[1]):
+    iters = 0
+    curr_error = 10000
+    loss = loss_fn_generator(feature_num)
+    while (curr_error > 1) and (iters<100):
+        optim.zero_grad()
+        loss_res = loss(params)
+        loss_res.backward()
+        optim.step()
+        curr_error = loss_res.data[0][0]
+        iters += 1
+    errors_and_weights.append((curr_error, torch.diag(sigmoid(x @ params)).data, feature_num))
+errors_sorted = sorted(errors_and_weights, key=lambda elem: elem[0], reverse=True)
+print(errors_sorted[0])
