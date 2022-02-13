@@ -12,7 +12,7 @@ compas_df = CompasDataset().convert_to_dataframe()[0]
 torch.cuda.set_device('cuda:0')
 
 
-def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, flat: torch.Tensor, feature_num: int, minimize: bool = False):
+def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int):
     """
     Factory for the loss function that pytorch runs will be optimizing in WLS
     :param x: the data tensor
@@ -27,16 +27,14 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, flat: torch.Tensor, feat
     basis = torch.tensor(basis_list, requires_grad=True).cuda()
     # If we're maximizing, minimize -loss
     factor = -1
-    if minimize:
-        factor = 1
 
     def loss_fn(params):
         one_d = sigmoid(x @ params)
         # We add a flat value to prevent div by 0, then normalize by the trace
-        diag = torch.diag(one_d + flat) * (float(x.shape[0]) / torch.sum(one_d + flat))
+        diag = torch.diag(one_d + flat)
         x_t = torch.t(x)
         denom = torch.inverse(x_t @ diag @ x)
-        return factor * (basis @ (denom @ (x_t @ diag @ y)))
+        return torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + torch.sum(one_d + flat)
 
     return loss_fn
 
@@ -58,24 +56,11 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     params_min = torch.randn(x.shape[1], requires_grad=True, device="cuda")
     flat_list = [0.0001 for _ in range(x.shape[0])]
     flat = torch.tensor(flat_list, requires_grad=True).cuda()
-    optim = Adam(params=[params_min], lr=0.05)
-    iters = 0
-    curr_error = 10000
-    loss_min = loss_fn_generator(x, y, flat, feature_num, minimize=True)
-    while iters < niters:
-        optim.zero_grad()
-        loss_res = loss_min(params_min)
-        loss_res.backward()
-        optim.step()
-        curr_error = loss_res.item()
-        iters += 1
-    min_error = curr_error
-    # Initialize and optimize the maximum direction
     params_max = torch.randn(x.shape[1], requires_grad=True, device="cuda")
     optim = Adam(params=[params_max], lr=0.05)
     iters = 0
     curr_error = 10000
-    loss_max = loss_fn_generator(x, y, flat, feature_num, minimize=False)
+    loss_max = loss_fn_generator(x, y, initial_val, flat, feature_num)
     while iters < niters:
         optim.zero_grad()
         loss_res = loss_max(params_max)
@@ -84,13 +69,8 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         curr_error = loss_res.item()
         iters += 1
     max_error = curr_error * -1
-    # Check which is a greater difference, return that one and its associated weights
-    if abs(max_error - initial_val) > abs(min_error - initial_val):
-        print(max_error, initial_val, (sigmoid(x @ params_max) + flat).cpu().detach().numpy())
-        return max_error - initial_val, (sigmoid(x @ params_max) + flat).cpu().detach().numpy()
-
-    print(min_error, initial_val, (sigmoid(x @ params_min) + flat).cpu().detach().numpy())
-    return min_error - initial_val, (sigmoid(x @ params_min) + flat).cpu().detach().numpy()
+    print(max_error, initial_val, (sigmoid(x @ params_min) + flat).cpu().detach().numpy())
+    return max_error, (sigmoid(x @ params_min) + flat).cpu().detach().numpy()
 
 
 def initial_value(x: torch.Tensor, y:torch.Tensor, feature_num:int) -> float:
