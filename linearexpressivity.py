@@ -25,8 +25,6 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
     basis = torch.tensor(basis_list, requires_grad=True).cuda()
-    # If we're maximizing, minimize -loss
-    factor = -1
 
     def loss_fn(params):
         one_d = sigmoid(x @ params)
@@ -34,7 +32,9 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat
         diag = torch.diag(one_d + flat)
         x_t = torch.t(x)
         denom = torch.inverse(x_t @ diag @ x)
-        return torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + torch.sum(one_d + flat)
+        # we want to maximize this, so multiply by -1
+        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + 10 * torch.sum(one_d + flat) /
+                     x.shape[0])
 
     return loss_fn
 
@@ -49,12 +49,10 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     :param initial_val: What the expressivity over the whole dataset for the feature is.
     :return: the differential expressivity and maximal subset weights.
     """
-    niters = 300
+    niters = 30
     # Set seed to const value for reproducibility
     torch.manual_seed(0)
-    # Initialize and optimize the minimum direction
-    params_min = torch.randn(x.shape[1], requires_grad=True, device="cuda")
-    flat_list = [0.0001 for _ in range(x.shape[0])]
+    flat_list = [0.01 for _ in range(x.shape[0])]
     flat = torch.tensor(flat_list, requires_grad=True).cuda()
     params_max = torch.randn(x.shape[1], requires_grad=True, device="cuda")
     optim = Adam(params=[params_max], lr=0.05)
@@ -69,11 +67,11 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         curr_error = loss_res.item()
         iters += 1
     max_error = curr_error * -1
-    print(max_error, initial_val, (sigmoid(x @ params_min) + flat).cpu().detach().numpy())
-    return max_error, (sigmoid(x @ params_min) + flat).cpu().detach().numpy()
+    print(max_error, initial_val, (sigmoid(x @ params_max) + flat).cpu().detach().numpy())
+    return max_error, (sigmoid(x @ params_max) + flat).cpu().detach().numpy()
 
 
-def initial_value(x: torch.Tensor, y:torch.Tensor, feature_num:int) -> float:
+def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
     Given a dataset, target, and feature number, returns the expressivity of that feature over the dataset.
     :param x: the data tensor
@@ -89,7 +87,7 @@ def initial_value(x: torch.Tensor, y:torch.Tensor, feature_num:int) -> float:
     return (basis @ (denom @ (x_t @ y))).item()
 
 
-def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str ='two_year_recid'):
+def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year_recid'):
     """
     Given a dataset, finds the differential expressivity and maximal subset over all features.
     Saves that subset to a file.
@@ -114,7 +112,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str ='two_year_
     print(errors_sorted[0])
     error, assigns = train_and_return(x, y, errors_sorted[0][1], initial_value(x, y, errors_sorted[0][1]))
     print(error, assigns)
-    np.savetxt(f"assignments_feature_{errors_sorted[0][1]}:error_{error}.csv", assigns, fmt='%.3f', delimiter=",")
+    np.savetxt(f"assignments_feature_{errors_sorted[0][1]}_error_{error}.csv", assigns, fmt='%.3f', delimiter=",")
     print(dataset.columns[errors_sorted[0][1]])
 
 
