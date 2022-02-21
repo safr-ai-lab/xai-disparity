@@ -33,7 +33,7 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat
         x_t = torch.t(x)
         denom = torch.inverse(x_t @ diag @ x)
         # we want to maximize this, so multiply by -1
-        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + 10 * torch.sum(one_d + flat) /
+        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + 15 * torch.sum(one_d + flat) /
                      x.shape[0])
 
     return loss_fn
@@ -49,10 +49,10 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     :param initial_val: What the expressivity over the whole dataset for the feature is.
     :return: the differential expressivity and maximal subset weights.
     """
-    niters = 30
+    niters = 50
     # Set seed to const value for reproducibility
     torch.manual_seed(0)
-    flat_list = [0.01 for _ in range(x.shape[0])]
+    flat_list = [0.001 for _ in range(x.shape[0])]
     flat = torch.tensor(flat_list, requires_grad=True).cuda()
     params_max = torch.randn(x.shape[1], requires_grad=True, device="cuda")
     optim = Adam(params=[params_max], lr=0.05)
@@ -67,9 +67,9 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         curr_error = loss_res.item()
         iters += 1
     max_error = curr_error * -1
-    print(max_error, initial_val, (sigmoid(x @ params_max) + flat).cpu().detach().numpy())
-    return max_error, (sigmoid(x @ params_max) + flat).cpu().detach().numpy()
-
+    assigns = (sigmoid(x @ params_max) + flat).cpu().detach().numpy()
+    print(max_error, initial_val, assigns[assigns>=0.02])
+    return max_error, assigns, params_max.cpu().detach().numpy()
 
 def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
@@ -101,7 +101,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
     for feature_num in range(int(x.shape[1])):
         full_dataset = initial_value(x, y, feature_num)
         try:
-            error, _ = train_and_return(x, y, feature_num, full_dataset)
+            error, _, _ = train_and_return(x, y, feature_num, full_dataset)
             if not (np.isnan(error)):
                 errors_and_weights.append((error, feature_num))
                 print(error, feature_num)
@@ -110,9 +110,11 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
             continue
     errors_sorted = sorted(errors_and_weights, key=lambda elem: abs(elem[0]), reverse=True)
     print(errors_sorted[0])
-    error, assigns = train_and_return(x, y, errors_sorted[0][1], initial_value(x, y, errors_sorted[0][1]))
-    print(error, assigns)
-    np.savetxt(f"assignments_feature_{errors_sorted[0][1]}_error_{error}.csv", assigns, fmt='%.3f', delimiter=",")
+    error, assigns, params = train_and_return(x, y, errors_sorted[0][1], initial_value(x, y, errors_sorted[0][1]))
+    print(error, assigns[(assigns>=0.002) & (assigns<=1.0)])
+    params_with_labels = np.array([(dataset.columns[i], param) for i, param in enumerate(params)])
+    np.savetxt(f"assignments_feature_{dataset.columns[errors_sorted[0][1]]}_error_{error}.csv", assigns, fmt='%.3f', delimiter=",")
+    np.savetxt(f"params_feature_{dataset.columns[errors_sorted[0][1]]}_error_{error}.csv", params, fmt='%f.3f', delimiter=",")
     print(dataset.columns[errors_sorted[0][1]])
 
 
