@@ -68,8 +68,9 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         iters += 1
     max_error = curr_error * -1
     assigns = (sigmoid(x @ params_max) + flat).cpu().detach().numpy()
-    print(max_error, initial_val, assigns[assigns>=0.02])
+    print(max_error, initial_val, assigns[assigns >= 0.02])
     return max_error, assigns, params_max.cpu().detach().numpy()
+
 
 def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
@@ -98,7 +99,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
     y = torch.tensor(dataset[target_column].values).float().cuda()
     x = torch.tensor(dataset.drop(target_column, axis=1).values).float().cuda()
     errors_and_weights = []
-    for feature_num in range(int(x.shape[1])):
+    for feature_num in range(x.shape[1]):
         full_dataset = initial_value(x, y, feature_num)
         try:
             error, _, _ = train_and_return(x, y, feature_num, full_dataset)
@@ -111,10 +112,15 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
     errors_sorted = sorted(errors_and_weights, key=lambda elem: abs(elem[0]), reverse=True)
     print(errors_sorted[0])
     error, assigns, params = train_and_return(x, y, errors_sorted[0][1], initial_value(x, y, errors_sorted[0][1]))
-    print(error, assigns[(assigns>=0.002) & (assigns<=1.0)])
-    params_with_labels = np.array([(dataset.columns[i], param) for i, param in enumerate(params)])
-    np.savetxt(f"assignments_feature_{dataset.columns[errors_sorted[0][1]]}_error_{error}.csv", assigns, fmt='%.3f', delimiter=",")
-    np.savetxt(f"params_feature_{dataset.columns[errors_sorted[0][1]]}_error_{error}.csv", params, fmt='%f.3f', delimiter=",")
+    print(error, assigns[(assigns >= 0.002) & (assigns <= 1.0)])
+    params_with_labels = np.array(
+        sorted([[dataset.columns[i], float(param)] for i, param in enumerate(params)], key=lambda row: abs(row[1]),
+               reverse=True))
+    print(params_with_labels)
+    np.savetxt(f"assignments_feature_{dataset.columns[errors_sorted[0][1]]}_error_{error}.csv", assigns, fmt='%.3f',
+               delimiter=",")
+    np.savetxt(f"params_feature_{dataset.columns[errors_sorted[0][1]]}_error_{error}.csv", params_with_labels,
+               delimiter=",", fmt='%s: %s')
     print(dataset.columns[errors_sorted[0][1]])
 
 
