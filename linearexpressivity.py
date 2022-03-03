@@ -49,7 +49,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     :param initial_val: What the expressivity over the whole dataset for the feature is.
     :return: the differential expressivity and maximal subset weights.
     """
-    niters = 50
+    niters = 100
     # Set seed to const value for reproducibility
     torch.manual_seed(0)
     flat_list = [0.001 for _ in range(x.shape[0])]
@@ -124,4 +124,5 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
     print(dataset.columns[errors_sorted[0][1]])
 
 
-find_extreme_subgroups(compas_df)
+if __name__ == "__main__":
+    find_extreme_subgroups(compas_df)
