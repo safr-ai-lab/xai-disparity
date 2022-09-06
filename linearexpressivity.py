@@ -122,13 +122,13 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
 
     if useCUDA:
         y = torch.tensor(dataset[target_column].values).float().cuda()
-        x = torch.tensor(dataset.drop(target_column, axis=1).values).float().cuda()
+        x = torch.tensor(dataset.drop(target_column, axis=1).values.astype('float16')).float().cuda()
     else:
         y = torch.tensor(dataset[target_column].values).float()
         x = torch.tensor(dataset.drop(target_column, axis=1).values.astype('float16')).float()
     errors_and_weights = []
     for feature_num in range(x.shape[1]):
-        print(feature_num)
+        print("Feature", feature_num, "of", x.shape[1])
         full_dataset = initial_value(x, y, feature_num)
         try:
             error, _, _ = train_and_return(x, y, feature_num, full_dataset)
