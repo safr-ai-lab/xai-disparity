@@ -3,13 +3,24 @@ import pandas as pd
 import numpy as np
 from torch.special import expit as sigmoid
 from torch.optim import Adam
-from aif360.datasets import CompasDataset
+import time
+#from aif360.datasets import CompasDataset
+
+# Enable GPU if desired
+useCUDA = False
+if useCUDA:
+    torch.cuda.set_device('cuda:0')
+else:
+    torch.device('cuda:0')
 
 # Initialize the dataset from CSV
-compas_df = CompasDataset().convert_to_dataframe()[0]
-
-# Enable my GPU
-torch.cuda.set_device('cuda:0')
+#compas_df = CompasDataset().convert_to_dataframe()[0]
+compas_df = pd.read_csv('data/compas-scores-two-years.csv')
+compas_df = compas_df[['sex', 'age', 'race', 'juv_fel_count', 'juv_misd_count', 'juv_other_count',
+                       'priors_count', 'two_year_recid']]
+compas_df['sex'].replace({'Female':1, 'Male':0},inplace=True)
+compas_df.loc[compas_df['race'] != 'Caucasian', 'race'] = 0
+compas_df.loc[compas_df['race'] == 'Caucasian', 'race'] = 1
 
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int):
@@ -24,7 +35,10 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    basis = torch.tensor(basis_list, requires_grad=True).cuda()
+    if useCUDA:
+        basis = torch.tensor(basis_list, requires_grad=True).cuda()
+    else:
+        basis = torch.tensor(basis_list, requires_grad=True)
 
     def loss_fn(params):
         one_d = sigmoid(x @ params)
@@ -53,8 +67,12 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     # Set seed to const value for reproducibility
     torch.manual_seed(0)
     flat_list = [0.001 for _ in range(x.shape[0])]
-    flat = torch.tensor(flat_list, requires_grad=True).cuda()
-    params_max = torch.randn(x.shape[1], requires_grad=True, device="cuda")
+    if useCUDA:
+        flat = torch.tensor(flat_list, requires_grad=True).cuda()
+        params_max = torch.randn(x.shape[1], requires_grad=True, device="cuda")
+    else:
+        flat = torch.tensor(flat_list, requires_grad=True)
+        params_max = torch.randn(x.shape[1], requires_grad=True)
     optim = Adam(params=[params_max], lr=0.05)
     iters = 0
     curr_error = 10000
@@ -82,9 +100,14 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    basis = torch.tensor(basis_list, requires_grad=True).cuda()
-    x_t = torch.t(x).cuda()
-    denom = torch.inverse(x_t @ x).cuda()
+    if useCUDA:
+        basis = torch.tensor(basis_list, requires_grad=True).cuda()
+        x_t = torch.t(x).cuda()
+        denom = torch.inverse(x_t @ x).cuda()
+    else:
+        basis = torch.tensor(basis_list, requires_grad=True)
+        x_t = torch.t(x)
+        denom = torch.inverse(x_t @ x)
     return (basis @ (denom @ (x_t @ y))).item()
 
 
@@ -96,10 +119,16 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
     :param target_column:  Which column in that dataframe is the target.
     :return:  N/A.  Logs results.
     """
-    y = torch.tensor(dataset[target_column].values).float().cuda()
-    x = torch.tensor(dataset.drop(target_column, axis=1).values).float().cuda()
+
+    if useCUDA:
+        y = torch.tensor(dataset[target_column].values).float().cuda()
+        x = torch.tensor(dataset.drop(target_column, axis=1).values).float().cuda()
+    else:
+        y = torch.tensor(dataset[target_column].values).float()
+        x = torch.tensor(dataset.drop(target_column, axis=1).values.astype('float16')).float()
     errors_and_weights = []
     for feature_num in range(x.shape[1]):
+        print(feature_num)
         full_dataset = initial_value(x, y, feature_num)
         try:
             error, _, _ = train_and_return(x, y, feature_num, full_dataset)
@@ -125,4 +154,6 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
 
 
 if __name__ == "__main__":
+    start = time.time()
     find_extreme_subgroups(compas_df)
+    print("Runtime: ", (time.time()-start)/60, " Minutes")
