@@ -4,7 +4,7 @@ import numpy as np
 from torch.special import expit as sigmoid
 from torch.optim import Adam
 import time
-#from aif360.datasets import CompasDataset
+from aif360.datasets import CompasDataset
 
 # Enable GPU if desired
 useCUDA = False
@@ -14,13 +14,7 @@ else:
     torch.device('cuda:0')
 
 # Initialize the dataset from CSV
-#compas_df = CompasDataset().convert_to_dataframe()[0]
-compas_df = pd.read_csv('data/compas-scores-two-years.csv')
-compas_df = compas_df[['sex', 'age', 'race', 'juv_fel_count', 'juv_misd_count', 'juv_other_count',
-                       'priors_count', 'two_year_recid']]
-compas_df['sex'].replace({'Female':1, 'Male':0},inplace=True)
-compas_df.loc[compas_df['race'] != 'Caucasian', 'race'] = 0
-compas_df.loc[compas_df['race'] == 'Caucasian', 'race'] = 1
+compas_df = CompasDataset().convert_to_dataframe()[0]
 
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int):
@@ -156,4 +150,4 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
 if __name__ == "__main__":
     start = time.time()
     find_extreme_subgroups(compas_df)
-    print("Runtime: ", (time.time()-start)/60, " Minutes")
+    print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
