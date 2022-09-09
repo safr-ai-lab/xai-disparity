@@ -134,12 +134,18 @@ def find_extreme_subgroups(dataset: pd.DataFrame, target_column: str = 'two_year
             continue
     errors_sorted = sorted(errors_and_weights, key=lambda elem: abs(elem[0]), reverse=True)
     print(errors_sorted[0])
-    error, assigns, params = train_and_return(x, y, errors_sorted[0][1], initial_value(x, y, errors_sorted[0][1]))
+    i_value = initial_value(x, y, errors_sorted[0][1])
+    error, assigns, params = train_and_return(x, y, errors_sorted[0][1], i_value)
     print(error, assigns[(assigns >= 0.002) & (assigns <= 1.0)])
     params_with_labels = np.array(
         sorted([[dataset.columns[i], float(param)] for i, param in enumerate(params)], key=lambda row: abs(row[1]),
                reverse=True))
     print(params_with_labels)
+    with open(f'output_{dataset.columns[errors_sorted[0][1]]}.txt', 'w') as f:
+        f.write("Initial Value: ")
+        f.write(str(i_value))
+        f.write("\n Final Value:")
+        f.write(str(error))
     np.savetxt(f"assignments_feature_{dataset.columns[errors_sorted[0][1]]}_error_{error}.csv", assigns, fmt='%.3f',
                delimiter=",")
     np.savetxt(f"params_feature_{dataset.columns[errors_sorted[0][1]]}_error_{error}.csv", params_with_labels,
