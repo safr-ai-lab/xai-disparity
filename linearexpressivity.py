@@ -4,7 +4,7 @@ import numpy as np
 from torch.special import expit as sigmoid
 from torch.optim import Adam
 import time
-from aif360.datasets import CompasDataset
+from aif360.datasets import CompasDataset, BankDataset
 
 # Enable GPU if desired
 useCUDA = True
@@ -14,7 +14,9 @@ else:
     torch.device('cuda:0')
 
 # Initialize the dataset from CSV
-compas_df = CompasDataset().convert_to_dataframe()[0]
+df = CompasDataset().convert_to_dataframe()[0]
+#df = BankDataset.convert_to_dataframe()[0]
+#df = pd.read_csv('data/ACSIncome_CA_2018_ohsample.csv')
 
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int):
@@ -78,6 +80,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         optim.step()
         curr_error = loss_res.item()
         iters += 1
+    #print(params_max.grad)
     max_error = curr_error * -1
     assigns = (sigmoid(x @ params_max) + flat).cpu().detach().numpy()
     print(max_error, initial_val, assigns[assigns >= 0.02])
@@ -105,7 +108,7 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     return (basis @ (denom @ (x_t @ y))).item()
 
 
-def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str = 'two_year_recid'):
+def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str):
     """
     Given a dataset, finds the differential expressivity and maximal subset over all features.
     Saves that subset to a file.
@@ -157,5 +160,5 @@ if __name__ == "__main__":
     start = time.time()
     seeds = [0,1,2]
     for s in seeds:
-        find_extreme_subgroups(compas_df, seed=s)
+        find_extreme_subgroups(df, seed=s,target_column='two_year_recid')
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
