@@ -4,17 +4,19 @@ import numpy as np
 from torch.special import expit as sigmoid
 from torch.optim import Adam
 import time
-from aif360.datasets import CompasDataset
+from aif360.datasets import CompasDataset, BankDataset
 
 # Enable GPU if desired
-useCUDA = True
+useCUDA = False
 if useCUDA:
     torch.cuda.set_device('cuda:0')
 else:
     torch.device('cuda:0')
 
 # Initialize the dataset from CSV
-compas_df = CompasDataset().convert_to_dataframe()[0]
+df = CompasDataset().convert_to_dataframe()[0]
+#df = BankDataset().convert_to_dataframe()[0]
+#df = pd.read_csv('data/ACSIncome_CA_2018_ohsample.csv')
 
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int):
@@ -57,7 +59,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     :param initial_val: What the expressivity over the whole dataset for the feature is.
     :return: the differential expressivity and maximal subset weights.
     """
-    niters = 1000
+    niters = 2
     # Set seed to const value for reproducibility
     torch.manual_seed(seed)
     flat_list = [0.001 for _ in range(x.shape[0])]
@@ -105,7 +107,7 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     return (basis @ (denom @ (x_t @ y))).item()
 
 
-def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str = 'two_year_recid'):
+def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, sensitive: list, target_column: str):
     """
     Given a dataset, finds the differential expressivity and maximal subset over all features.
     Saves that subset to a file.
@@ -121,8 +123,11 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str 
         y = torch.tensor(dataset[target_column].values).float()
         x = torch.tensor(dataset.drop(target_column, axis=1).values.astype('float16')).float()
     errors_and_weights = []
-    for feature_num in range(x.shape[1]):
-        print("Feature", feature_num, "of", x.shape[1])
+    count = 1
+    for feature in sensitive:
+        feature_num = dataset.columns.get_loc(feature)
+        print("Feature", count, "of", len(sensitive))
+        count += 1
         full_dataset = initial_value(x, y, feature_num)
         try:
             error, _, _ = train_and_return(x, y, feature_num, full_dataset, seed)
@@ -155,7 +160,13 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str 
 
 if __name__ == "__main__":
     start = time.time()
-    seeds = [0,1,2]
+    seeds = [0]
+    # Load df up top
+    target = 'two_year_recid'
+    sensitive = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+
+    new_cols = [col for col in df.columns if col != target] + [target]
+    df = df[new_cols]
     for s in seeds:
-        find_extreme_subgroups(compas_df, seed=s)
+        find_extreme_subgroups(df, seed=s, sensitive=sensitive, target_column=target)
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
