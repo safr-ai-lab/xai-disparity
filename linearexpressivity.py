@@ -4,6 +4,8 @@ import numpy as np
 from torch.special import expit as sigmoid
 from torch.optim import Adam
 import time
+import multiprocessing
+from functools import partial
 from aif360.datasets import CompasDataset, BankDataset
 
 # Enable GPU if desired
@@ -107,6 +109,18 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     return (basis @ (denom @ (x_t @ y))).item()
 
 
+def feature_search(x, y, seed, feature_num):
+    full_dataset = initial_value(x, y, feature_num)
+    try:
+        error, _, _ = train_and_return(x, y, feature_num, full_dataset, seed)
+        if not (np.isnan(error)):
+            error_tuple = (error, feature_num)
+            #print(error, feature_num)
+    except RuntimeError as e:
+        print(e)
+    return error_tuple
+
+
 def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, sensitive: list, target_column: str):
     """
     Given a dataset, finds the differential expressivity and maximal subset over all features.
@@ -122,21 +136,14 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, sensitive: list, ta
     else:
         y = torch.tensor(dataset[target_column].values).float()
         x = torch.tensor(dataset.drop(target_column, axis=1).values.astype('float16')).float()
-    errors_and_weights = []
-    count = 1
-    for feature in sensitive:
-        feature_num = dataset.columns.get_loc(feature)
-        print("Feature", count, "of", len(sensitive))
-        count += 1
-        full_dataset = initial_value(x, y, feature_num)
-        try:
-            error, _, _ = train_and_return(x, y, feature_num, full_dataset, seed)
-            if not (np.isnan(error)):
-                errors_and_weights.append((error, feature_num))
-                print(error, feature_num)
-        except RuntimeError as e:
-            print(e)
-            continue
+
+    feature_nums = range(x.shape[1])
+    pool = multiprocessing.Pool()
+    func = partial(feature_search, x, y, seed)
+    errors_and_weights = pool.map(func, feature_nums)
+    pool.close()
+    pool.join()
+
     errors_sorted = sorted(errors_and_weights, key=lambda elem: abs(elem[0]), reverse=True)
     print(errors_sorted[0])
     i_value = initial_value(x, y, errors_sorted[0][1])
@@ -165,8 +172,10 @@ if __name__ == "__main__":
     target = 'two_year_recid'
     sensitive = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
 
+    # Order columns with target at end
     new_cols = [col for col in df.columns if col != target] + [target]
     df = df[new_cols]
     for s in seeds:
         find_extreme_subgroups(df, seed=s, sensitive=sensitive, target_column=target)
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+    print("Runtime:", '%.2f' % ((time.time() - start)), "Seconds")
