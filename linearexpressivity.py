@@ -87,7 +87,10 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     s_list = [0. for _ in range(x.shape[1])]
     for f in f_sensitive:
         s_list[f] = 1.
-    sensitives = torch.tensor(s_list, requires_grad=True)
+    if useCUDA:
+        sensitives = torch.tensor(s_list, requires_grad=True).cuda()
+    else:
+        sensitives = torch.tensor(s_list, requires_grad=True)
 
     if useCUDA:
         flat = torch.tensor(flat_list, requires_grad=True).cuda()
