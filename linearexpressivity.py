@@ -17,18 +17,22 @@ else:
 # df = CompasDataset().convert_to_dataframe()[0]
 # target = 'two_year_recid'
 # sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+# df_name = 'compas'
 
 # df = BankDataset().convert_to_dataframe()[0]
 # target = 'y'
 # sensitive_features = ['age', 'marital=married', 'marital=single']
+# df_name = 'bank'
 
 # df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
 # target = 'PINCP'
 # sensitive_features = ['AGEP', 'SEX', 'MAR', 'RAC1P_1.0', 'RAC1P_2.0', 'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
+# df_name = 'folktables'
 
 df = pd.read_csv('data/student/student_cleaned.csv')
 target = 'G3'
 sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
+df_name = 'student'
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int,
                       sensitives: torch.Tensor):
@@ -140,6 +144,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     :param sensitives: Which features are sensitive characteristics
     :return:  N/A.  Logs results.
     """
+    out_df = pd.DataFrame(columns = ['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Coefficients'])
 
     if useCUDA:
         y = torch.tensor(dataset[target_column].values).float().cuda()
@@ -152,18 +157,24 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
         print("Feature", feature_num, "of", x.shape[1])
         full_dataset = initial_value(x, y, feature_num)
         try:
-            error, _, _ = train_and_return(x, y, feature_num, full_dataset, f_sensitive, seed)
+            error, assigns, params = train_and_return(x, y, feature_num, full_dataset, f_sensitive, seed)
             if not (np.isnan(error)):
                 errors_and_weights.append((error, feature_num))
                 print(error, feature_num)
+                params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
+                out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
+                                                                        'F(D)': full_dataset,
+                                                                        'max(F(S))': error,
+                                                                        'Difference': abs(error-full_dataset),
+                                                                        'Subgroup Coefficients': params_with_labels}])])
         except RuntimeError as e:
             print(e)
             continue
     errors_sorted = sorted(errors_and_weights, key=lambda elem: abs(elem[0]), reverse=True)
-    print(errors_sorted[0])
+    #print(errors_sorted[0])
     i_value = initial_value(x, y, errors_sorted[0][1])
     error, assigns, params = train_and_return(x, y, errors_sorted[0][1], i_value, f_sensitive, seed)
-    print(error, assigns[(assigns >= 0.002) & (assigns <= 1.0)])
+    #print(error, assigns[(assigns >= 0.002) & (assigns <= 1.0)])
     params_with_labels = np.array(
         sorted([[dataset.columns[i], float(param)] for i, param in enumerate(params)], key=lambda row: abs(row[1]),
                reverse=True))
@@ -179,6 +190,8 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     #            delimiter=",", fmt='%s: %s')
     print(dataset.columns[errors_sorted[0][1]])
 
+    return out_df
+
 
 if __name__ == "__main__":
     start = time.time()
@@ -192,5 +205,6 @@ if __name__ == "__main__":
 
     seeds = [0]
     for s in seeds:
-        find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
+        out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
+        out.to_csv(f'{df_name}_output_seed{s}.csv')
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
