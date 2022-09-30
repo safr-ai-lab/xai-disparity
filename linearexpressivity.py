@@ -21,7 +21,7 @@ df_name = 'compas'
 
 # df = BankDataset().convert_to_dataframe()[0]
 # target = 'y'
-# sensitive_features = ['age', 'marital=married', 'marital=single']
+# sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
 # df_name = 'bank'
 
 # df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
@@ -214,5 +214,5 @@ if __name__ == "__main__":
     seeds = [0]
     for s in seeds:
         out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
-        out.to_csv(f'{df_name}_output_seed{s}.csv')
+        out.to_csv(f'output/{df_name}_output_seed{s}.csv')
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
