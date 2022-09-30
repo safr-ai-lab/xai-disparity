@@ -14,10 +14,10 @@ else:
     torch.device('cuda:0')
 
 # Initialize the dataset from CSV
-# df = CompasDataset().convert_to_dataframe()[0]
-# target = 'two_year_recid'
-# sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
-# df_name = 'compas'
+df = CompasDataset().convert_to_dataframe()[0]
+target = 'two_year_recid'
+sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+df_name = 'compas'
 
 # df = BankDataset().convert_to_dataframe()[0]
 # target = 'y'
@@ -29,10 +29,15 @@ else:
 # sensitive_features = ['AGEP', 'SEX', 'MAR', 'RAC1P_1.0', 'RAC1P_2.0', 'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
 # df_name = 'folktables'
 
-df = pd.read_csv('data/student/student_cleaned.csv')
-target = 'G3'
-sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
-df_name = 'student'
+# df = pd.read_csv('data/student/student_cleaned.csv')
+# target = 'G3'
+# sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
+# df_name = 'student'
+
+# Set to True if using for comparison
+dummy = False
+if dummy:
+    df[target] = df[target].sample(frac=1).values
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int,
                       sensitives: torch.Tensor):
