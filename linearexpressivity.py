@@ -38,6 +38,7 @@ df_name = 'compas'
 dummy = False
 if dummy:
     df[target] = df[target].sample(frac=1).values
+    df_name = 'dummy'+df_name
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int,
                       sensitives: torch.Tensor):
