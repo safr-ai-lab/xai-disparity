@@ -22,8 +22,8 @@ class RegOracle:
         y = []
         total_cost = 0
         for i in range(n):
-            c_0 = reg0.predict([x[i][:-1]])
-            c_1 = reg1.predict([x[i][:-1]])
+            c_0 = reg0.predict([x[i][:]])
+            c_1 = reg1.predict([x[i][:]])
             y_i = int(c_1 < c_0)
             cost = min(c_0, c_1)
             if not self.minimize:
@@ -56,4 +56,4 @@ class ZeroPredictor:
         return
 
 
-CostPredictor = LinearRegression
+ExpPredictor = LinearRegression
