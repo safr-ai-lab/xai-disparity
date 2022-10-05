@@ -10,6 +10,33 @@ import re
 import time
 
 
+# df = CompasDataset().convert_to_dataframe()[0]
+# target = 'two_year_recid'
+# sensitive = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+# df_name = 'compas'
+
+# df = BankDataset().convert_to_dataframe()[0]
+# target = 'y'
+# sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
+# df_name = 'bank'
+
+# df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
+# target = 'PINCP'
+# sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
+#                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
+# df_name = 'folktables'
+
+df = pd.read_csv('data/student/student_cleaned.csv').head(10)
+target = 'G3'
+sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
+df_name = 'student'
+
+# Set to True if using for comparison
+dummy = False
+if dummy:
+    df[target] = df[target].sample(frac=1).values
+    df_name = 'dummy_'+df_name
+
 class LimeExpFunc:
     def __init__(self, classifier, dataset):
         self.classifier = classifier
@@ -43,7 +70,7 @@ class LimeExpFunc:
         return self.exps[row][feature]
 
 
-ExpFuncGenType = NewType("CostFuncGenType", Callable[[np.ndarray, int], Callable[[np.ndarray], float]])
+ExpFuncGenType = NewType("ExpFuncGenType", Callable[[np.ndarray, int], Callable[[np.ndarray], float]])
 
 def fit_one_side(dataset, exps, minimize=False):
     left_predictor = ExpPredictor()
@@ -70,12 +97,14 @@ def full_dataset_expressivity(exp_func, feature_num):
     return total
 
 
-def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func, target_column):
+def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func:ExpFuncGenType,
+                           target_column: str, f_sensitive: list):
     # Populate expressivities for the dataset
     print("Populating expressivity values")
     exp_func.populate_exps()
 
     numpy_ds = dataset.drop(target_column, axis=1).to_numpy()
+    sensitive_ds = dataset[f_sensitive].to_numpy()
 
     out_df = pd.DataFrame(columns=['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Size', 'Subgroup Coefficients'])
 
@@ -93,11 +122,11 @@ def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func, t
 
         # Train logistic regression model on the classification of the points
         if len(set(predictions)) == 1:
-            params = np.zeros(len(numpy_ds[0]))
+            params_with_labels = {f: 0 for f in f_sensitive}
         else:
-            subgroup_model = LogisticRegression(solver='lbfgs', max_iter=200).fit(numpy_ds, predictions)
+            subgroup_model = LogisticRegression(solver='lbfgs', max_iter=200).fit(sensitive_ds, predictions)
             params = subgroup_model.coef_[0]
-        params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
+            params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
 
         out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
                                                                 'F(D)': total,
@@ -127,27 +156,19 @@ def split_out_dataset(dataset, target_column):
     y = dataset[target_column].to_numpy()
     return x, y
 
-# df = CompasDataset().convert_to_dataframe()[0]
-# target = 'two_year_recid'
-# sensitive = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
-# df_name = 'compas'
 
-df = pd.read_csv('data/student/student_cleaned.csv').head(10)
-target = 'G3'
-sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
-df_name = 'student'
+if __name__ == "__main__":
+    # Sort columns so target is at end
+    new_cols = [col for col in df.columns if col != target] + [target]
+    df = df[new_cols]
 
-# Sort columns so target is at end
-new_cols = [col for col in df.columns if col != target] + [target]
-df = df[new_cols]
+    classifier = RandomForestClassifier()
+    x, y = split_out_dataset(df, target)
+    classifier.fit(x, y)
 
-classifier = RandomForestClassifier()
-x, y = split_out_dataset(df, target)
-classifier.fit(x, y)
-
-start = time.time()
-out = extremize_exps_dataset(df, LimeExpFunc(classifier, x), target_column=target)
-out.to_csv("testrun.csv")
-print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+    start = time.time()
+    out = extremize_exps_dataset(df, LimeExpFunc(classifier, x), target_column=target, f_sensitive=sensitive_features)
+    out.to_csv(f'output/{df_name}_LIME_output.csv')
+    print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
 
 
