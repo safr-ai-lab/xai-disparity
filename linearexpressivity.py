@@ -14,10 +14,10 @@ else:
     torch.device('cuda:0')
 
 # Initialize the dataset from CSV
-df = CompasDataset().convert_to_dataframe()[0]
-target = 'two_year_recid'
-sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
-df_name = 'compas'
+# df = CompasDataset().convert_to_dataframe()[0]
+# target = 'two_year_recid'
+# sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+# df_name = 'compas'
 
 # df = BankDataset().convert_to_dataframe()[0]
 # target = 'y'
@@ -29,10 +29,10 @@ df_name = 'compas'
 # sensitive_features = ['AGEP', 'SEX', 'MAR', 'RAC1P_1.0', 'RAC1P_2.0', 'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
 # df_name = 'folktables'
 
-# df = pd.read_csv('data/student/student_cleaned.csv')
-# target = 'G3'
-# sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
-# df_name = 'student'
+df = pd.read_csv('data/student/student_cleaned.csv')
+target = 'G3'
+sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
+df_name = 'student'
 
 # Set to True if using for comparison
 dummy = False
@@ -153,7 +153,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     :param sensitives: Which features are sensitive characteristics
     :return:  N/A.  Logs results.
     """
-    out_df = pd.DataFrame(columns = ['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Coefficients'])
+    out_df = pd.DataFrame(columns = ['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Coefficients', 'Subgroup Size'])
 
     if useCUDA:
         y = torch.tensor(dataset[target_column].values).float().cuda()
@@ -167,6 +167,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
         full_dataset = initial_value(x, y, feature_num)
         try:
             error, assigns, params = train_and_return(x, y, feature_num, full_dataset, f_sensitive, seed)
+            subgroup_size = [round(a) for a in assigns].count(1)/len(assigns)
             if not (np.isnan(error)):
                 errors_and_weights.append((error, feature_num))
                 print(error, feature_num)
@@ -175,7 +176,8 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
                                                                         'F(D)': full_dataset,
                                                                         'max(F(S))': error,
                                                                         'Difference': abs(error-full_dataset),
-                                                                        'Subgroup Coefficients': params_with_labels}])])
+                                                                        'Subgroup Coefficients': params_with_labels,
+                                                                        'Subgroup Size': subgroup_size}])])
         except RuntimeError as e:
             print(e)
             continue
