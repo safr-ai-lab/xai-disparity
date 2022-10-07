@@ -2,6 +2,7 @@ from reg_oracle import ZeroPredictor, ExpPredictor, RegOracle
 from lime.lime_tabular import LimeTabularExplainer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
 from typing import Union, Callable, NewType
 import pandas as pd
 import numpy as np
@@ -26,7 +27,7 @@ import time
 #                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
 # df_name = 'folktables'
 
-df = pd.read_csv('data/student/student_cleaned.csv').head(10)
+df = pd.read_csv('data/student/student_cleaned.csv')
 target = 'G3'
 sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
 df_name = 'student'
@@ -106,7 +107,7 @@ def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func:Ex
     numpy_ds = dataset.drop(target_column, axis=1).to_numpy()
     sensitive_ds = dataset[f_sensitive].to_numpy()
 
-    out_df = pd.DataFrame(columns=['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Size', 'Subgroup Coefficients'])
+    out_df = pd.DataFrame(columns=['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Ratio', 'Subgroup Size', 'Subgroup Coefficients'])
 
     for feature_num in range(len(numpy_ds[0])):
         total = full_dataset_expressivity(exp_func, feature_num)
@@ -126,12 +127,14 @@ def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func:Ex
         else:
             subgroup_model = LogisticRegression(solver='lbfgs', max_iter=200).fit(sensitive_ds, predictions)
             params = subgroup_model.coef_[0]
-            params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
+            print(params)
+            params_with_labels = {dataset[f_sensitive].columns[i]: float(param) for (i, param) in enumerate(params)}
 
         out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
                                                                 'F(D)': total,
                                                                 'max(F(S))': furthest_exp,
                                                                 'Difference': abs(furthest_exp - total),
+                                                                'Ratio': furthest_exp/total,
                                                                 'Subgroup Coefficients': params_with_labels,
                                                                 'Subgroup Size': subgroup_size}])])
 
@@ -162,12 +165,17 @@ if __name__ == "__main__":
     new_cols = [col for col in df.columns if col != target] + [target]
     df = df[new_cols]
 
+    # train test split
+    train_df, test_df = train_test_split(df, test_size=0.2)
+
     classifier = RandomForestClassifier()
-    x, y = split_out_dataset(df, target)
-    classifier.fit(x, y)
+    train_x, train_y = split_out_dataset(train_df, target)
+    classifier.fit(train_x, train_y)
+
+    test_x, test_y = split_out_dataset(test_df, target)
 
     start = time.time()
-    out = extremize_exps_dataset(df, LimeExpFunc(classifier, x), target_column=target, f_sensitive=sensitive_features)
+    out = extremize_exps_dataset(test_df, LimeExpFunc(classifier, test_x), target_column=target, f_sensitive=sensitive_features)
     out.to_csv(f'output/{df_name}_LIME_output.csv')
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
 
