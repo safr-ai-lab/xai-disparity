@@ -4,10 +4,11 @@ import numpy as np
 from torch.special import expit as sigmoid
 from torch.optim import Adam
 import time
+import glob
 from aif360.datasets import CompasDataset, BankDataset
 
 # Enable GPU if desired
-useCUDA = True
+useCUDA = False
 if useCUDA:
     torch.cuda.set_device('cuda:0')
 else:
@@ -26,12 +27,13 @@ else:
 
 # df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
 # target = 'PINCP'
-# sensitive_features = ['AGEP', 'SEX', 'MAR', 'RAC1P_1.0', 'RAC1P_2.0', 'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
+# sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
+#                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
 # df_name = 'folktables'
 
 df = pd.read_csv('data/student/student_cleaned.csv')
 target = 'G3'
-sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
+sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
 df_name = 'student'
 
 # Set to True if using for comparison
@@ -217,5 +219,10 @@ if __name__ == "__main__":
     seeds = [0]
     for s in seeds:
         out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
-        out.to_csv(f'output/{df_name}_output_seed{s}.csv')
+
+        files_present = glob.glob(f'output/t{df_name}_output_seed{s}.csv')
+        if not files_present:
+            out.to_csv(f'output/t{df_name}_output_seed{s}.csv')
+        else:
+            out.to_csv(f'output/t{df_name}_output_seed{s}_1.csv')
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
