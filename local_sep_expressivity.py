@@ -9,6 +9,12 @@ import numpy as np
 from aif360.datasets import CompasDataset, BankDataset
 import re
 import time
+import argparse
+
+parser = argparse.ArgumentParser(description='Locally separable run')
+parser.add_argument('--dummy', action='store_true')
+args = parser.parse_args()
+dummy = args.dummy
 
 
 class LimeExpFunc:
@@ -146,8 +152,6 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
-
-dummy = False
 
 df = pd.read_csv('data/student/student_cleaned.csv')
 target = 'G3'

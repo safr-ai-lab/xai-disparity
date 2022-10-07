@@ -6,6 +6,13 @@ from torch.optim import Adam
 import time
 import glob
 from aif360.datasets import CompasDataset, BankDataset
+import argparse
+
+
+parser = argparse.ArgumentParser(description='Locally separable run')
+parser.add_argument('--dummy', action='store_true')
+args = parser.parse_args()
+dummy = args.dummy
 
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int,
@@ -201,15 +208,12 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
     return 1
 
 
-# Enable GPU if desired
+# Enable GPU if desired. Sometimes returns false values
 useCUDA = False
 if useCUDA:
     torch.cuda.set_device('cuda:0')
 else:
     torch.device('cuda:0')
-
-# Set to True if using for comparison
-dummy = False
 
 df = pd.read_csv('data/student/student_cleaned.csv')
 target = 'G3'
