@@ -11,33 +11,6 @@ import re
 import time
 
 
-# df = CompasDataset().convert_to_dataframe()[0]
-# target = 'two_year_recid'
-# sensitive = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
-# df_name = 'compas'
-
-# df = BankDataset().convert_to_dataframe()[0]
-# target = 'y'
-# sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
-# df_name = 'bank'
-
-# df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
-# target = 'PINCP'
-# sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
-#                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
-# df_name = 'folktables'
-
-df = pd.read_csv('data/student/student_cleaned.csv')
-target = 'G3'
-sensitive_features = ['sex_M', 'Pstatus_T', 'Dalc', 'Walc', 'health']
-df_name = 'student'
-
-# Set to True if using for comparison
-dummy = False
-if dummy:
-    df[target] = df[target].sample(frac=1).values
-    df_name = 'dummy_'+df_name
-
 class LimeExpFunc:
     def __init__(self, classifier, dataset):
         self.classifier = classifier
@@ -50,7 +23,7 @@ class LimeExpFunc:
     def populate_exps(self):
         i = 0
         for row in self.dataset:
-            print('Computing ', i)
+            #print('Computing ', i)
             exp_i = self.lime_exp.explain_instance(row, self.classifier.predict_proba, num_features=row.shape[0]).as_list()
             exp_dict = {}
             # Clean up LIME output and return dict with key=feature, value=expressivity
@@ -138,19 +111,6 @@ def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func:Ex
                                                                 'Subgroup Coefficients': params_with_labels,
                                                                 'Subgroup Size': subgroup_size}])])
 
-    # max_exps = np.array(
-    #     [(feature_num, fit_exps_dataset(numpy_ds, feature_num, exp_func, minimize=False),
-    #       full_dataset_expressivity(exp_func, feature_num)) for feature_num in range(len(numpy_ds[0]))])
-    # min_exps = np.array(
-    #     [(feature_num, fit_exps_dataset(numpy_ds, feature_num, exp_func, minimize=True),
-    #       full_dataset_expressivity(exp_func, feature_num)) for feature_num in range(len(numpy_ds[0]))])
-
-    # feature_num, (max_predictions, max_exp), total = sorted(max_exps, key=lambda k: (k[1][1] - k[2]), reverse=True)[0]
-    # feature_num, (min_predictions, min_exp), total = sorted(min_exps, key=lambda k: (k[1][1] - k[2]))[0]
-    # if abs(max_exp) >= abs(min_exp):
-    #     return feature_num, max_predictions, max_exp, total
-    # return feature_num, min_predictions, min_exp, total
-
     return out_df
 
 
@@ -160,7 +120,13 @@ def split_out_dataset(dataset, target_column):
     return x, y
 
 
-if __name__ == "__main__":
+def run_system(df, target, sensitive_features, df_name, dummy=False):
+    if dummy:
+        df[target] = df[target].sample(frac=1).values
+        df_name = 'dummy_' + df_name
+
+    print("Running", df_name)
+
     # Sort columns so target is at end
     new_cols = [col for col in df.columns if col != target] + [target]
     df = df[new_cols]
@@ -178,5 +144,35 @@ if __name__ == "__main__":
     out = extremize_exps_dataset(test_df, LimeExpFunc(classifier, test_x), target_column=target, f_sensitive=sensitive_features)
     out.to_csv(f'output/{df_name}_LIME_output.csv')
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+    return 1
+
+
+dummy = False
+
+df = pd.read_csv('data/student/student_cleaned.csv')
+target = 'G3'
+sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
+df_name = 'student'
+run_system(df, target, sensitive_features, df_name, dummy)
+
+df = CompasDataset().convert_to_dataframe()[0]
+target = 'two_year_recid'
+sensitive = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+df_name = 'compas'
+run_system(df, target, sensitive_features, df_name, dummy)
+
+df = BankDataset().convert_to_dataframe()[0]
+target = 'y'
+sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
+df_name = 'bank'
+run_system(df, target, sensitive_features, df_name, dummy)
+
+df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
+target = 'PINCP'
+sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
+                      'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
+df_name = 'folktables'
+run_system(df, target, sensitive_features, df_name, dummy)
+
 
 

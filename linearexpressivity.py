@@ -7,40 +7,6 @@ import time
 import glob
 from aif360.datasets import CompasDataset, BankDataset
 
-# Enable GPU if desired
-useCUDA = False
-if useCUDA:
-    torch.cuda.set_device('cuda:0')
-else:
-    torch.device('cuda:0')
-
-# Initialize the dataset from CSV
-# df = CompasDataset().convert_to_dataframe()[0]
-# target = 'two_year_recid'
-# sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
-# df_name = 'compas'
-
-# df = BankDataset().convert_to_dataframe()[0]
-# target = 'y'
-# sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
-# df_name = 'bank'
-
-# df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
-# target = 'PINCP'
-# sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
-#                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
-# df_name = 'folktables'
-
-df = pd.read_csv('data/student/student_cleaned.csv')
-target = 'G3'
-sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
-df_name = 'student'
-
-# Set to True if using for comparison
-dummy = False
-if dummy:
-    df[target] = df[target].sample(frac=1).values
-    df_name = 'dummy_'+df_name
 
 def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int,
                       sensitives: torch.Tensor):
@@ -155,7 +121,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     :param sensitives: Which features are sensitive characteristics
     :return:  N/A.  Logs results.
     """
-    out_df = pd.DataFrame(columns = ['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Coefficients', 'Subgroup Size'])
+    out_df = pd.DataFrame(columns = ['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Ratio', 'Subgroup Coefficients', 'Subgroup Size'])
 
     if useCUDA:
         y = torch.tensor(dataset[target_column].values).float().cuda()
@@ -177,7 +143,8 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
                 out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
                                                                         'F(D)': full_dataset,
                                                                         'max(F(S))': error,
-                                                                        'Difference': abs(error-full_dataset),
+                                                                        'Difference': abs(error - full_dataset),
+                                                                        'Ratio': error/full_dataset,
                                                                         'Subgroup Coefficients': params_with_labels,
                                                                         'Subgroup Size': subgroup_size}])])
         except RuntimeError as e:
@@ -206,7 +173,12 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     return out_df
 
 
-if __name__ == "__main__":
+def run_system(df, target, sensitive_features, df_name, dummy=False):
+    if dummy:
+        df[target] = df[target].sample(frac=1).values
+        df_name = 'dummy_' + df_name
+
+    print("Running", df_name)
     start = time.time()
 
     # Sort columns so target is at end
@@ -220,9 +192,47 @@ if __name__ == "__main__":
     for s in seeds:
         out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
 
-        files_present = glob.glob(f'output/t{df_name}_output_seed{s}.csv')
+        files_present = glob.glob(f'output/nonsep/{df_name}_output_seed{s}.csv')
         if not files_present:
-            out.to_csv(f'output/t{df_name}_output_seed{s}.csv')
+            out.to_csv(f'output/nonsep/{df_name}_output_seed{s}.csv')
         else:
-            out.to_csv(f'output/t{df_name}_output_seed{s}_1.csv')
+            out.to_csv(f'output/nonsep/{df_name}_output_seed{s}_1.csv')
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+    return 1
+
+
+# Enable GPU if desired
+useCUDA = False
+if useCUDA:
+    torch.cuda.set_device('cuda:0')
+else:
+    torch.device('cuda:0')
+
+# Set to True if using for comparison
+dummy = False
+
+df = pd.read_csv('data/student/student_cleaned.csv')
+target = 'G3'
+sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
+df_name = 'student'
+run_system(df, target, sensitive_features, df_name, dummy)
+
+df = CompasDataset().convert_to_dataframe()[0]
+target = 'two_year_recid'
+sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+df_name = 'compas'
+run_system(df, target, sensitive_features, df_name, dummy)
+
+df = BankDataset().convert_to_dataframe()[0]
+target = 'y'
+sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
+df_name = 'bank'
+run_system(df, target, sensitive_features, df_name, dummy)
+
+df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
+target = 'PINCP'
+sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
+                      'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
+df_name = 'folktables'
+run_system(df, target, sensitive_features, df_name, dummy)
+
