@@ -142,7 +142,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
 
     start = time.time()
     out = extremize_exps_dataset(test_df, LimeExpFunc(classifier, test_x), target_column=target, f_sensitive=sensitive_features)
-    out.to_csv(f'output/{df_name}_LIME_output.csv')
+    out.to_csv(f'output/sep/{df_name}_LIME_output.csv')
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
