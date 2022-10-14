@@ -161,7 +161,7 @@ run_system(df, target, sensitive_features, df_name, dummy)
 
 df = CompasDataset().convert_to_dataframe()[0]
 target = 'two_year_recid'
-sensitive = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
 df_name = 'compas'
 run_system(df, target, sensitive_features, df_name, dummy)
 
