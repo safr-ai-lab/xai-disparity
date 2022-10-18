@@ -24,8 +24,7 @@ else:
     torch.device('cuda:0')
 
 
-def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat: torch.Tensor, feature_num: int,
-                      sensitives: torch.Tensor):
+def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, feature_num: int, sensitives: torch.Tensor):
     """
     Factory for the loss function that pytorch runs will be optimizing in WLS
     :param x: the data tensor
@@ -37,10 +36,17 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
+    flat_list = [0.001 for _ in range(x.shape[1])]
+    flat_list2 = [0.001 for _ in range(x.shape[0])]
+
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
+        flat = torch.tensor(flat_list, requires_grad=True).cuda()
+        flat2 = torch.tensor(flat_list2, requires_grad=True).cuda()
     else:
         basis = torch.tensor(basis_list, requires_grad=True)
+        flat = torch.tensor(flat_list, requires_grad=True)
+        flat2 = torch.tensor(flat_list2, requires_grad=True)
 
     # Look into derivation of gradient by hand and implementing it here instead.
     def loss_fn(params):
@@ -51,8 +57,8 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat
         x_t = torch.t(x)
         denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat)) # add the flat here?
         # we want to maximize this, so multiply by -1
-        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + 15 * torch.sum(one_d + flat) /
-                     x.shape[0])
+        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val)
+               + 15 * torch.sum(one_d + flat2)/x.shape[0])
 
     return loss_fn
 
@@ -73,26 +79,20 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     # Set seed to const value for reproducibility
     torch.manual_seed(seed)
 
-    flat_list = [0.001 for _ in range(x.shape[0])]
-
     s_list = [0. for _ in range(x.shape[1])]
     for f in f_sensitive:
         s_list[f] = 1.
     if useCUDA:
         sensitives = torch.tensor(s_list, requires_grad=True).cuda()
-    else:
-        sensitives = torch.tensor(s_list, requires_grad=True)
-
-    if useCUDA:
-        flat = torch.tensor(flat_list, requires_grad=True).cuda()
         params_max = torch.randn(x.shape[1], requires_grad=True, device="cuda")
     else:
-        flat = torch.tensor(flat_list, requires_grad=True)
+        sensitives = torch.tensor(s_list, requires_grad=True)
         params_max = torch.randn(x.shape[1], requires_grad=True)
+
     optim = Adam(params=[params_max], lr=0.05)
     iters = 0
     curr_error = 10000
-    loss_max = loss_fn_generator(x, y, initial_val, flat, feature_num, sensitives)
+    loss_max = loss_fn_generator(x, y, initial_val, feature_num, sensitives)
     while iters < niters:
         optim.zero_grad()
         loss_res = loss_max(params_max)
@@ -103,7 +103,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     #print(params_max.grad)
     params_max = sensitives * params_max
     max_error = curr_error * -1
-    assigns = (sigmoid(x @ params_max) + flat).cpu().detach().numpy()
+    assigns = (sigmoid(x @ params_max)).cpu().detach().numpy()
     #print(max_error, initial_val, assigns[assigns >= 0.02])
     return max_error, assigns, params_max.cpu().detach().numpy()
 
@@ -139,7 +139,7 @@ def final_value(x: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.001 for _ in range(x.shape[0])]
+    flat_list = [0.001 for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -151,9 +151,9 @@ def final_value(x: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_
     # only train using sensitive features
     one_d = sigmoid(x @ params)
     # We add a flat value to prevent div by 0, then normalize by the trace
-    diag = torch.diag(one_d + flat)
+    diag = torch.diag(one_d)
     x_t = torch.t(x)
-    denom = torch.inverse(x_t @ diag @ x)
+    denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ diag @ y))).item()
 
 def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str, f_sensitive: list):
@@ -168,7 +168,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     """
     out_df = pd.DataFrame(columns = ['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Ratio', 'Subgroup Coefficients', 'Subgroup Size'])
 
-    train_df, test_df = train_test_split(dataset, test_size=.2)
+    train_df, test_df = train_test_split(dataset, test_size=.2, random_state=seed)
 
     if useCUDA:
         y_train = torch.tensor(train_df[target_column].values).float().cuda()
@@ -237,9 +237,9 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
 
         files_present = glob.glob(f'output/nonsep/{df_name}_output_seed{s}.csv')
         if not files_present:
-            out.to_csv(f'nonsep/{df_name}_output_seed{s}.csv')
+            out.to_csv(f'output/nonsep/{df_name}_output_seed{s}.csv')
         else:
-            out.to_csv(f'nonsep/{df_name}_output_seed{s}_1.csv')
+            out.to_csv(f'output/nonsep/{df_name}_output_seed{s}_1.csv')
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 

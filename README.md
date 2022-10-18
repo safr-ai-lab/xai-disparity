@@ -7,9 +7,9 @@ This notebook also includes links for downloading the datasets.
 
 Currently implemented using LIME as the feature expressivity value. Run using:
 
-"'
+'''
 python local_sep_expressivity.py
-"'
+'''
 
 Include the flag --dummy if you want to scramble the y values for comparison purposes.
 
@@ -17,9 +17,9 @@ Include the flag --dummy if you want to scramble the y values for comparison pur
 
 Uses linear regression to define feature expressivity. Run using:
 
-"'
+'''
 python linearexpressivity.py
-"'
+'''
 
 Include the flag --dummy if you want to scramble the y values for comparison purposes.
 
