@@ -42,13 +42,14 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, flat
     else:
         basis = torch.tensor(basis_list, requires_grad=True)
 
+    # Look into derivation of gradient by hand and implementing it here instead.
     def loss_fn(params):
         # only train using sensitive features
         one_d = sigmoid(x @ (sensitives * params))
         # We add a flat value to prevent div by 0, then normalize by the trace
-        diag = torch.diag(one_d + flat)
+        diag = torch.diag(one_d)
         x_t = torch.t(x)
-        denom = torch.inverse(x_t @ diag @ x)
+        denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat)) # add the flat here?
         # we want to maximize this, so multiply by -1
         return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + 15 * torch.sum(one_d + flat) /
                      x.shape[0])
@@ -221,9 +222,6 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
         df[target] = df[target].sample(frac=1).values
         df_name = 'dummy_' + df_name
 
-    print("Running", df_name)
-    start = time.time()
-
     # Sort columns so target is at end
     new_cols = [col for col in df.columns if col != target] + [target]
     df = df[new_cols]
@@ -233,6 +231,8 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
 
     seeds = [0]
     for s in seeds:
+        print("Running", df_name, ", Seed =", s)
+        start = time.time()
         out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
 
         files_present = glob.glob(f'output/nonsep/{df_name}_output_seed{s}.csv')
@@ -240,7 +240,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
             out.to_csv(f'nonsep/{df_name}_output_seed{s}.csv')
         else:
             out.to_csv(f'nonsep/{df_name}_output_seed{s}_1.csv')
-    print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+        print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
 
