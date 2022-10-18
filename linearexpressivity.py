@@ -55,8 +55,9 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, feat
         # We add a flat value to prevent div by 0, then normalize by the trace
         diag = torch.diag(one_d)
         x_t = torch.t(x)
-        denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat)) # add the flat here?
+        denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
         # we want to maximize this, so multiply by -1
+        # Do we need flat2?
         return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val)
                + 15 * torch.sum(one_d + flat2)/x.shape[0])
 
@@ -118,14 +119,18 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
+    flat_list = [0.001 for _ in range(x.shape[1])]
+
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
+        flat = torch.tensor(flat_list, requires_grad=True).cuda()
         x_t = torch.t(x).cuda()
-        denom = torch.inverse(x_t @ x).cuda()
+        denom = torch.inverse((x_t @ x) + torch.diag(flat)).cuda()
     else:
         basis = torch.tensor(basis_list, requires_grad=True)
+        flat = torch.tensor(flat_list, requires_grad=True)
         x_t = torch.t(x)
-        denom = torch.inverse(x_t @ x)
+        denom = torch.inverse((x_t @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ y))).item()
 
 def final_value(x: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_num: int) -> float:
