@@ -53,9 +53,9 @@ class LimeExpFunc:
 ExpFuncGenType = NewType("ExpFuncGenType", Callable[[np.ndarray, int], Callable[[np.ndarray], float]])
 
 def fit_one_side(dataset, exps, minimize=False):
-    left_predictor = ExpPredictor()
-    right_predictor = ZeroPredictor()
-    left_predictor.fit(dataset, exps)
+    left_predictor = ZeroPredictor()
+    right_predictor = ExpPredictor()
+    right_predictor.fit(dataset, exps)
     # flip the predictors
     reg_oracle = RegOracle(left_predictor, right_predictor, minimize=minimize)
     return reg_oracle
@@ -85,10 +85,11 @@ def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func:Ex
     numpy_ds = dataset.drop(target_column, axis=1).to_numpy()
     sensitive_ds = dataset[f_sensitive].to_numpy()
 
-    out_df = pd.DataFrame(columns=['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Ratio', 'Subgroup Size', 'Subgroup Coefficients'])
+    out_df = pd.DataFrame(columns=['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Size', 'Subgroup Coefficients'])
 
     for feature_num in range(len(numpy_ds[0])):
         total = full_dataset_expressivity(exp_func, feature_num)
+        print(total)
         max_pred, max_exp = fit_exps_dataset(numpy_ds, feature_num, exp_func, minimize=False)
         min_pred, min_exp = fit_exps_dataset(numpy_ds, feature_num, exp_func, minimize=True)
         if abs(max_exp-total) > abs(min_exp-total):
@@ -113,7 +114,6 @@ def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func:Ex
                                                                 'F(D)': total,
                                                                 'max(F(S))': furthest_exp,
                                                                 'Difference': abs(furthest_exp - total),
-                                                                'Ratio': furthest_exp/total,
                                                                 'Subgroup Coefficients': params_with_labels,
                                                                 'Subgroup Size': subgroup_size}])])
     return out_df
