@@ -75,54 +75,93 @@ def full_dataset_expressivity(exp_func, feature_num):
         total += row[feature_num]
     return total
 
+def partial_dataset_expressivity(exp_func, feature_num, membership):
+    """
+    Computes expressivity over part of dataset that is member of group
+    :param exp_func: cost expressivity class used
+    :param feature_num: feature we are intersted in
+    :param membership: binary array of length equal to exp_fun.exps. Denotes membership in group
+    :return: total expressivity over these rows
+    """
+    total = 0
+    for i in range(len(exp_func.exps)):
+        total += exp_func.exps[i][feature_num] * membership[i]
+    return total
 
-def extremize_exps_dataset(dataset: Union[np.ndarray, pd.DataFrame], exp_func:ExpFuncGenType,
-                           target_column: str, f_sensitive: list, seed: int):
-    # Populate expressivities for the dataset
-    print("Populating expressivity values")
+def split_out_dataset(dataset, target_column, f_sensitive):
+    x = dataset.drop(target_column, axis=1).to_numpy()
+    y = dataset[target_column].to_numpy()
+    sensitive_ds = dataset[f_sensitive].to_numpy()
+    return x, y, sensitive_ds
+
+def extremize_exps_dataset(dataset: pd.DataFrame, exp_func_type: ExpFuncGenType, target_column: str, f_sensitive: list, seed: int):
+    # train test split
+    train_df, test_df = train_test_split(df, test_size=0.2, random_state=seed)
+    train_x, train_y, sensitive_train = split_out_dataset(train_df, target, f_sensitive)
+    test_x, test_y, sensitive_test = split_out_dataset(test_df, target, f_sensitive)
+    classifier = RandomForestClassifier(random_state=seed)
+    classifier.fit(train_x, train_y)
+
+    exp_func = exp_func_type(classifier, train_x, seed)
+    print("Populating train expressivity values")
     exp_func.populate_exps()
 
-    numpy_ds = dataset.drop(target_column, axis=1).to_numpy()
-    sensitive_ds = dataset[f_sensitive].to_numpy()
+    exp_func_test = exp_func_type(classifier, test_x, seed)
+    print("Populating test expressivity values")
+    exp_func_test.populate_exps()
 
-    out_df = pd.DataFrame(columns=['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Size', 'Subgroup Coefficients'])
+    # numpy_ds is now train_x/test_x
+    # sensitive_ds is now sensitive_train/sensitive_test
+    # numpy_ds = dataset.drop(target_column, axis=1).to_numpy()
+    # sensitive_ds = dataset[f_sensitive].to_numpy()
 
-    for feature_num in range(len(numpy_ds[0])):
-        total = full_dataset_expressivity(exp_func, feature_num)
-        print(total)
-        max_pred, max_exp = fit_exps_dataset(numpy_ds, feature_num, exp_func, minimize=False)
-        min_pred, min_exp = fit_exps_dataset(numpy_ds, feature_num, exp_func, minimize=True)
-        if abs(max_exp-total) > abs(min_exp-total):
-            furthest_exp = max_exp
-            predictions = max_pred
+    out_df = pd.DataFrame(columns=['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Size', 'Subgroup Coefficients',
+                                   'Direction', 'F(D)_train', 'max(F(S))_train', 'Difference_train', 'Subgroup Size_train'])
+
+    for feature_num in range(len(train_x[0])):
+        total_train = full_dataset_expressivity(exp_func, feature_num)
+        max_pred, max_exp = fit_exps_dataset(train_x, feature_num, exp_func, minimize=False)
+        min_pred, min_exp = fit_exps_dataset(train_x, feature_num, exp_func, minimize=True)
+        if abs(max_exp-total_train) > abs(min_exp-total_train):
+            furthest_exp_train = max_exp
+            predictions_train = max_pred
+            direction = 'maximize'
         else:
-            furthest_exp = min_exp
-            predictions = min_pred
-        # Record if we are keeping max or min
-        subgroup_size = predictions.count(1)/len(predictions)
+            furthest_exp_train = min_exp
+            predictions_train = min_pred
+            direction = 'minimize'
+        subgroup_size_train = predictions_train.count(1)/len(predictions_train)
 
         # Train logistic regression model on the classification of the points
-        if len(set(predictions)) == 1:
+        if len(set(predictions_train)) == 1:
             params_with_labels = {f: 0 for f in f_sensitive}
+            print("zeros")
+            subgroup_model = ZeroPredictor()
         else:
-            subgroup_model = LogisticRegression(solver='lbfgs', max_iter=200, random_state=seed).fit(sensitive_ds, predictions)
+            subgroup_model = LogisticRegression(solver='lbfgs', max_iter=200, random_state=seed).fit(sensitive_train, predictions_train)
             params = subgroup_model.coef_[0]
             print(params)
             params_with_labels = {dataset[f_sensitive].columns[i]: float(param) for (i, param) in enumerate(params)}
+
+        total = full_dataset_expressivity(exp_func_test, feature_num)
+
+        predictions_test = subgroup_model.predict(sensitive_test)
+        subgroup_size = np.sum(predictions_test)/len(predictions_test)
+
+        furthest_exp = partial_dataset_expressivity(exp_func_test, feature_num, predictions_test)
 
         out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
                                                                 'F(D)': total,
                                                                 'max(F(S))': furthest_exp,
                                                                 'Difference': abs(furthest_exp - total),
                                                                 'Subgroup Coefficients': params_with_labels,
-                                                                'Subgroup Size': subgroup_size}])])
+                                                                'Subgroup Size': subgroup_size,
+                                                                'Direction': direction,
+                                                                'F(D)_train': total_train,
+                                                                'max(F(S))_train': furthest_exp_train,
+                                                                'Difference_train': abs(furthest_exp_train - total_train),
+                                                                'Subgroup Size_train': subgroup_size_train}])])
     return out_df
-
-
-def split_out_dataset(dataset, target_column):
-    x = dataset.drop(target_column, axis=1).to_numpy()
-    y = dataset[target_column].to_numpy()
-    return x, y
 
 
 def run_system(df, target, sensitive_features, df_name, dummy=False):
@@ -140,18 +179,9 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
         print("Running", df_name, ", Seed =", s)
         start = time.time()
 
-        # train test split
-        train_df, test_df = train_test_split(df, test_size=0.2, random_state=s)
-
-        classifier = RandomForestClassifier(random_state=s)
-        train_x, train_y = split_out_dataset(train_df, target)
-        classifier.fit(train_x, train_y)
-
-        test_x, test_y = split_out_dataset(test_df, target)
-
-        out = extremize_exps_dataset(test_df, LimeExpFunc(classifier, test_x, seed=s), target_column=target,
+        out = extremize_exps_dataset(dataset=df, exp_func_type=LimeExpFunc, target_column=target,
                                      f_sensitive=sensitive_features, seed=s)
-        out.to_csv(f'output/sep/{df_name}_LIME_output_seed{s}.csv')
+        out.to_csv(f'output/sep/testtrain{df_name}_LIME_output_seed{s}.csv')
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
