@@ -37,16 +37,13 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, feat
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
     flat_list = [0.001 for _ in range(x.shape[1])]
-    flat_list2 = [0.001 for _ in range(x.shape[0])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
         flat = torch.tensor(flat_list, requires_grad=True).cuda()
-        flat2 = torch.tensor(flat_list2, requires_grad=True).cuda()
     else:
         basis = torch.tensor(basis_list, requires_grad=True)
         flat = torch.tensor(flat_list, requires_grad=True)
-        flat2 = torch.tensor(flat_list2, requires_grad=True)
 
     # Look into derivation of gradient by hand and implementing it here instead.
     def loss_fn(params):
@@ -57,9 +54,8 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, feat
         x_t = torch.t(x)
         denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
         # we want to maximize this, so multiply by -1
-        # Do we need flat2?
-        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val)
-               + 15 * torch.sum(one_d + flat2)/x.shape[0])
+        # remove subgroup size terminology (this optimizes subgroup size, is not ridge regularization)
+        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + 15 * torch.sum(one_d)/x.shape[0])
 
     return loss_fn
 
@@ -239,12 +235,13 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
         print("Running", df_name, ", Seed =", s)
         start = time.time()
         out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
-
-        files_present = glob.glob(f'output/nonsep/{df_name}_output_seed{s}.csv')
+        fname = f'output/nonsep/{df_name}_output_seed{s}.csv'
+        files_present = glob.glob(fname)
         if not files_present:
-            out.to_csv(f'output/nonsep/{df_name}_output_seed{s}.csv')
+            out.to_csv(fname)
         else:
-            out.to_csv(f'output/nonsep/{df_name}_output_seed{s}_1.csv')
+            fname = '1' + fname
+            out.to_csv(fname)
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
