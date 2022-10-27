@@ -55,7 +55,8 @@ def loss_fn_generator(x: torch.Tensor, y: torch.Tensor, initial_val: float, feat
         denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
         # we want to maximize this, so multiply by -1
         # remove subgroup size terminology (this optimizes subgroup size, is not ridge regularization)
-        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val) + 15 * torch.sum(one_d)/x.shape[0])
+        # + 15 * torch.sum(one_d)/x.shape[0]
+        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val))
 
     return loss_fn
 
@@ -97,7 +98,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         optim.step()
         curr_error = loss_res.item()
         iters += 1
-    #print(params_max.grad)
+    print(params_max.grad)
     params_max = sensitives * params_max
     max_error = curr_error * -1
     assigns = (sigmoid(x @ params_max)).cpu().detach().numpy()
@@ -129,14 +130,14 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
         denom = torch.inverse((x_t @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ y))).item()
 
-def final_value(x: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_num: int) -> float:
+def final_value(x: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_num: int):
     """
     Given a defined subgroup function, returns the expressivity over the test data set
     :param x: the test data tensor
     :param y: the test target tensor
     :param params: tensor with coefficients defining the subgroup
     :param feature_num: the feature to test
-    :return: the float value of expressivity over the dataset
+    :return: the float value of expressivity over the dataset and subgroup assignments
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
@@ -155,7 +156,7 @@ def final_value(x: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_
     diag = torch.diag(one_d)
     x_t = torch.t(x)
     denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
-    return (basis @ (denom @ (x_t @ diag @ y))).item()
+    return (basis @ (denom @ (x_t @ diag @ y))).item(), one_d.cpu().detach().numpy()
 
 def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str, f_sensitive: list):
     """
@@ -184,23 +185,27 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     errors_and_weights = []
     for feature_num in range(x_train.shape[1]):
         print("Feature", feature_num, "of", x_train.shape[1])
-        full_dataset = initial_value(x_train, y_train, feature_num)
+        total_exp_train = initial_value(x_train, y_train, feature_num)
         try:
-            error, assigns, params = train_and_return(x_train, y_train, feature_num, full_dataset, f_sensitive, seed)
-            subgroup_size = [round(a) for a in assigns].count(1)/len(assigns)
-            if not (np.isnan(error)):
-                full_dataset = initial_value(x_test, y_test, feature_num)
-                error = final_value(x_test, y_test, params, feature_num)
-                errors_and_weights.append((error, feature_num))
-                print(error, feature_num)
+            furthest_exp_train, assigns_train, params = train_and_return(x_train, y_train, feature_num, total_exp_train, f_sensitive, seed)
+            subgroup_size_train = [round(a) for a in assigns_train].count(1)/len(assigns_train)
+            if not (np.isnan(furthest_exp_train)):
+                total_exp = initial_value(x_test, y_test, feature_num)
+                furthest_exp, assigns = final_value(x_test, y_test, params, feature_num)
+                subgroup_size = [round(a) for a in assigns].count(1) / len(assigns)
+                errors_and_weights.append((furthest_exp, feature_num))
+                print(furthest_exp, feature_num)
                 params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
                 out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
-                                                                        'F(D)': full_dataset,
-                                                                        'max(F(S))': error,
-                                                                        'Difference': abs(error - full_dataset),
-                                                                        'Ratio': error/full_dataset,
+                                                                        'F(D)': total_exp,
+                                                                        'max(F(S))': furthest_exp,
+                                                                        'Difference': abs(furthest_exp - total_exp),
                                                                         'Subgroup Coefficients': params_with_labels,
-                                                                        'Subgroup Size': subgroup_size}])])
+                                                                        'Subgroup Size': subgroup_size,
+                                                                        'F(D)_train': total_exp_train,
+                                                                        'max(F(S))_train': furthest_exp_train,
+                                                                        'Difference_train': abs(furthest_exp_train - total_exp_train),
+                                                                        'Subgroup Size_train':subgroup_size_train}])])
         except RuntimeError as e:
             print(e)
             continue
