@@ -4,7 +4,7 @@ import numpy as np
 from torch.special import expit as sigmoid
 from torch.optim import Adam
 import time
-import glob
+from datetime import datetime
 from aif360.datasets import CompasDataset, BankDataset
 from sklearn.model_selection import train_test_split
 import argparse
@@ -98,7 +98,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         optim.step()
         curr_error = loss_res.item()
         iters += 1
-    print(params_max.grad)
+    #print(params_max.grad)
     params_max = sensitives * params_max
     max_error = curr_error * -1
     assigns = (sigmoid(x @ params_max)).cpu().detach().numpy()
@@ -146,6 +146,7 @@ def final_value(x: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
         flat = torch.tensor(flat_list, requires_grad=True).cuda()
+        params = torch.tensor(params, requires_grad=True, device="cuda")
     else:
         basis = torch.tensor(basis_list, requires_grad=True)
         flat = torch.tensor(flat_list, requires_grad=True)
@@ -168,7 +169,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     :param f_sensitive: Which features are sensitive characteristics
     :return:  N/A.  Logs results.
     """
-    out_df = pd.DataFrame(columns = ['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Ratio', 'Subgroup Coefficients', 'Subgroup Size'])
+    out_df = pd.DataFrame(columns = ['Feature', 'F(D)', 'max(F(S))', 'Difference', 'Subgroup Coefficients', 'Subgroup Size'])
 
     train_df, test_df = train_test_split(dataset, test_size=.2, random_state=seed)
 
@@ -240,13 +241,10 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
         print("Running", df_name, ", Seed =", s)
         start = time.time()
         out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
-        fname = f'output/nonsep/{df_name}_output_seed{s}.csv'
-        files_present = glob.glob(fname)
-        if not files_present:
-            out.to_csv(fname)
-        else:
-            fname = '1' + fname
-            out.to_csv(fname)
+        # use date as naming convention
+        date = datetime.today().strftime('%m_%d')
+        fname = f'output/nonsep/{df_name}_output_{date}.csv'
+        out.to_csv(fname)
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
