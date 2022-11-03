@@ -151,11 +151,11 @@ def final_value(x: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_
         basis = torch.tensor(basis_list, requires_grad=True)
         flat = torch.tensor(flat_list, requires_grad=True)
 
-    # only train using sensitive features
     one_d = sigmoid(x @ params)
     # We add a flat value to prevent div by 0, then normalize by the trace
     diag = torch.diag(one_d)
     x_t = torch.t(x)
+    # TODO: does flat need to be added here?
     denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ diag @ y))).item(), one_d.cpu().detach().numpy()
 
@@ -256,8 +256,9 @@ df_name = 'student'
 run_system(df, target, sensitive_features, df_name, dummy)
 
 # df = CompasDataset().convert_to_dataframe()[0]
+# df = pd.read_csv('data/compas/compas_cleaned.csv')
 # target = 'two_year_recid'
-# sensitive_features = ['age','race','sex','age_cat=25 - 45','age_cat=Greater than 45','age_cat=Less than 25']
+# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 # df_name = 'compas'
 # run_system(df, target, sensitive_features, df_name, dummy)
 
