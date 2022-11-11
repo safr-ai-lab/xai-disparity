@@ -228,7 +228,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
 def remove_intercept_column(x):
     mask = torch.arange(0, x.shape[1] - 1)
     x_cpu = x.cpu()
-    out = torch.index_select(x, 1, x_cpu)
+    out = torch.index_select(x_cpu, 1, mask)
     if useCUDA:
         out = out.cuda()
     return out
