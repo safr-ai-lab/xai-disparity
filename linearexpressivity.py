@@ -115,15 +115,18 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
+    flat_list = [0.001 for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
+        flat = torch.tensor(flat_list, requires_grad=True).cuda()
         x_t = torch.t(x).cuda()
-        denom = torch.inverse(x_t @ x).cuda()
+        denom = torch.inverse((x_t @ x) + torch.diag(flat)).cuda()
     else:
         basis = torch.tensor(basis_list, requires_grad=True)
+        flat = torch.tensor(flat_list, requires_grad=True)
         x_t = torch.t(x)
-        denom = torch.inverse(x_t @ x)
+        denom = torch.inverse((x_t @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ y))).item()
 
 def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_num: int):
@@ -138,18 +141,21 @@ def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, featur
     x = remove_intercept_column(x_0)
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
+    flat_list = [0.001 for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
+        flat = torch.tensor(flat_list, requires_grad=True).cuda()
         params = torch.tensor(params, requires_grad=True, device="cuda")
         x_t = torch.t(x).cuda()
     else:
         basis = torch.tensor(basis_list, requires_grad=True)
+        flat = torch.tensor(flat_list, requires_grad=True)
         x_t = torch.t(x)
 
     one_d = sigmoid(x_0 @ params)
     diag = torch.diag(one_d)
-    denom = torch.inverse(x_t @ diag @ x)
+    denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ diag @ y))).item(), one_d.cpu().detach().numpy()
 
 def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str, f_sensitive: list):
@@ -220,8 +226,12 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
     return out_df
 
 def remove_intercept_column(x):
-    mask = torch.arange(0, x.shape[1]-1)
-    return torch.index_select(x, 1, mask)
+    mask = torch.arange(0, x.shape[1] - 1)
+    x_cpu = x.cpu()
+    out = torch.index_select(x, 1, x_cpu)
+    if useCUDA:
+        out = out.cuda()
+    return out
 
 def run_system(df, target, sensitive_features, df_name, dummy=False):
     if dummy:
