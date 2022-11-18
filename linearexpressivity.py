@@ -54,10 +54,15 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
         x_t = torch.t(x)
         # Try ridge reg by weight of params and not by flat value?
         denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
-        # we want to maximize this, so multiply by -1
-        # remove subgroup size terminology (this optimizes subgroup size, is not ridge regularization)
-        # + 15 * torch.sum(one_d)/x.shape[0]
-        return -1 * (torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val))
+        difference_penalty = torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val)
+
+        size_penalty = 0
+        subgroup_size = torch.sum(one_d)/x.shape[0]
+        if subgroup_size < .05 or subgroup_size > .8:
+            size_penalty = 100*torch.abs((torch.sum(one_d)/x.shape[0])-.5)
+
+        # we want to maximize difference penalty but minimize size penalty
+        return size_penalty - difference_penalty
 
     return loss_fn
 
@@ -101,6 +106,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     params_max = sensitives * params_max
     max_error = curr_error * -1
     assigns = (sigmoid(x @ params_max)).cpu().detach().numpy()
+    print(torch.sum(sigmoid(x @ params_max))/x.shape[0])
     #print(max_error, initial_val, assigns[assigns >= 0.02])
     return max_error, assigns, params_max.cpu().detach().numpy()
 
@@ -156,7 +162,7 @@ def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, featur
     one_d = sigmoid(x_0 @ params)
     diag = torch.diag(one_d)
     denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
-    return (basis @ (denom @ (x_t @ diag @ y))).item(), one_d.cpu().detach().numpy()
+    return (basis @ (denom @ (x_t @ diag @ y))).detach().numpy()[0], one_d.cpu().detach().numpy()
 
 def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str, f_sensitive: list):
     """
@@ -188,8 +194,9 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
         x_train_ni = remove_intercept_column(x_train)
         total_exp_train = initial_value(x_train_ni, y_train, feature_num)
         try:
-            furthest_exp_train, assigns_train, params = train_and_return(x_train, y_train, feature_num, total_exp_train, f_sensitive, seed)
-            print(params)
+            _, assigns_train, params = train_and_return(x_train, y_train, feature_num, total_exp_train, f_sensitive, seed)
+            furthest_exp_train, _ = final_value(x_train, y_train, params, feature_num)
+            print(furthest_exp_train)
             subgroup_size_train = [round(a) for a in assigns_train].count(1)/len(assigns_train)
             if not (np.isnan(furthest_exp_train)):
                 x_test_ni = remove_intercept_column(x_test)
@@ -259,7 +266,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
         out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
         # use date as naming convention
         date = datetime.today().strftime('%m_%d')
-        fname = f'output/nonsep/{df_name}_output_{date}.csv'
+        fname = f'output/nonsep/t{df_name}_output_{date}.csv'
         out.to_csv(fname)
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
@@ -272,8 +279,8 @@ df_name = 'student'
 run_system(df, target, sensitive_features, df_name, dummy)
 
 # df = CompasDataset().convert_to_dataframe()[0]
-# df = pd.read_csv('data/compas/compas_cleaned.csv')
-# target = 'two_year_recid'
+# df = pd.read_csv('data/compas/compas_cleaned.csv')  #compas_cleaned_decile.csv
+# target = 'two_year_recid'  #'decile_score'
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 # df_name = 'compas'
 # run_system(df, target, sensitive_features, df_name, dummy)
