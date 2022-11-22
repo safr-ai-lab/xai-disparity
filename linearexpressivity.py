@@ -24,15 +24,21 @@ else:
     torch.device('cuda:0')
 
 
-def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, feature_num: int, sensitives: torch.Tensor):
+def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, feature_num: int,
+                      sensitives: torch.Tensor, alpha: float):
     """
     Factory for the loss function that pytorch runs will be optimizing in WLS
     :param x_0: the data tensor with intercept column
     :param y: the target tensor
+    :param initial_val: expressivity over full dataset
     :param feature_num: Which feature in the data do we care about
+    :param sensitives: tensor representing sensitive features
+    :param alpha: desired subgroup size
     :param minimize: Boolean -- are we minimizing or maximizing
     :return: a loss function for our particular WLS problem.
     """
+    lam = 1
+    # TODO: investigate minimize/maximize boolean
     x = remove_intercept_column(x_0)
 
     basis_list = [[0. for _ in range(x.shape[1])]]
@@ -56,18 +62,15 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
         denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
         difference_penalty = torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val)
 
-        size_penalty = 0
-        subgroup_size = torch.sum(one_d)/x.shape[0]
-        if subgroup_size < .05 or subgroup_size > .8:
-            size_penalty = 100*torch.abs((torch.sum(one_d)/x.shape[0])-.5)
-
+        size_penalty = lam*torch.abs((torch.sum(one_d)/x.shape[0])-alpha)
         # we want to maximize difference penalty but minimize size penalty
         return size_penalty - difference_penalty
 
     return loss_fn
 
 
-def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial_val: float, f_sensitive: list, seed: int):
+def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial_val: float,
+                     f_sensitive: list, alpha: float):
     """
     Given an x, y, feature num, and the expressivity over the whole dataset,
     returns the differential expressivity and maximal subset for that feature
@@ -76,7 +79,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     :param feature_num: which feature to optimize, int.
     :param initial_val: What the expressivity over the whole dataset for the feature is.
     :param f_sensitive: indices of sensitive features
-    :param seed: initializing seed for reproducibility
+    :param alpha: target subgroup size
     :return: the differential expressivity and maximal subset weights.
     """
     niters = 1000
@@ -95,7 +98,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     optim = Adam(params=[params_max], lr=0.05)
     iters = 0
     curr_error = 10000
-    loss_max = loss_fn_generator(x, y, initial_val, feature_num, sensitives)
+    loss_max = loss_fn_generator(x, y, initial_val, feature_num, sensitives, alpha)
     while iters < niters:
         optim.zero_grad()
         loss_res = loss_max(params_max)
@@ -162,14 +165,14 @@ def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, featur
     one_d = sigmoid(x_0 @ params)
     diag = torch.diag(one_d)
     denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
-    return (basis @ (denom @ (x_t @ diag @ y))).detach().numpy()[0], one_d.cpu().detach().numpy()
+    return (basis @ (denom @ (x_t @ diag @ y))).cpu().detach().numpy()[0], one_d.cpu().detach().numpy()
 
-def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str, f_sensitive: list):
+def find_extreme_subgroups(dataset: pd.DataFrame, alpha: float, target_column: str, f_sensitive: list):
     """
     Given a dataset, finds the differential expressivity and maximal subset over all features.
     Saves that subset to a file.
     :param dataset: the pandas dataframe to use
-    :param seed: pseudorandom seed for reproducibility
+    :param alpha: desired subgroup size
     :param target_column:  Which column in that dataframe is the target.
     :param f_sensitive: Which features are sensitive characteristics
     :return:  N/A.  Logs results.
@@ -194,7 +197,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
         x_train_ni = remove_intercept_column(x_train)
         total_exp_train = initial_value(x_train_ni, y_train, feature_num)
         try:
-            _, assigns_train, params = train_and_return(x_train, y_train, feature_num, total_exp_train, f_sensitive, seed)
+            _, assigns_train, params = train_and_return(x_train, y_train, feature_num, total_exp_train, f_sensitive, alpha)
             furthest_exp_train, _ = final_value(x_train, y_train, params, feature_num)
             print(furthest_exp_train)
             subgroup_size_train = [round(a) for a in assigns_train].count(1)/len(assigns_train)
@@ -207,6 +210,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, seed: int, target_column: str,
                 print(furthest_exp, feature_num)
                 params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
                 out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
+                                                                        'Alpha': alpha,
                                                                         'F(D)': total_exp,
                                                                         'max(F(S))': furthest_exp,
                                                                         'Difference': abs(furthest_exp - total_exp),
@@ -257,20 +261,22 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
     f_sensitive.append(df.shape[1]-2)
 
     print(df.shape[1])
-    print(f_sensitive)
+    final_df = pd.DataFrame()
 
-    seeds = [0]
-    for s in seeds:
-        print("Running", df_name, ", Seed =", s)
-        start = time.time()
-        out = find_extreme_subgroups(df, seed=s, target_column=target, f_sensitive=f_sensitive)
-        # use date as naming convention
-        date = datetime.today().strftime('%m_%d')
-        fname = f'output/nonsep/t{df_name}_output_{date}.csv'
-        out.to_csv(fname)
-        print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+    start = time.time()
+    alphas = [.05, .1, .2, .3, .4, .5]
+    for a in alphas:
+        print("Running", df_name, ", Alpha =", a)
+        out = find_extreme_subgroups(df, alpha=a, target_column=target, f_sensitive=f_sensitive)
+        final_df = pd.concat([final_df, out])
+
+    date = datetime.today().strftime('%m_%d')
+    fname = f'output/nonsep/{df_name}_output_{date}.csv'
+    final_df.to_csv(fname)
+    print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
+seed = 0
 
 df = pd.read_csv('data/student/student_cleaned.csv')
 target = 'G3'
@@ -278,9 +284,14 @@ sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health
 df_name = 'student'
 run_system(df, target, sensitive_features, df_name, dummy)
 
-# df = CompasDataset().convert_to_dataframe()[0]
-# df = pd.read_csv('data/compas/compas_cleaned.csv')  #compas_cleaned_decile.csv
-# target = 'two_year_recid'  #'decile_score'
+# df = pd.read_csv('data/compas/compas_cleaned.csv')
+# target = 'two_year_recid'
+# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
+# df_name = 'compas'
+# run_system(df, target, sensitive_features, df_name, dummy)
+
+# df = pd.read_csv('data/compas/compas_cleaned_decile.csv')
+# target = 'decile_score'
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 # df_name = 'compas'
 # run_system(df, target, sensitive_features, df_name, dummy)
