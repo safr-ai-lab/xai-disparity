@@ -9,6 +9,7 @@ import numpy as np
 from aif360.datasets import CompasDataset, BankDataset
 import re
 import time
+from datetime import datetime
 import argparse
 
 parser = argparse.ArgumentParser(description='Locally separable run')
@@ -181,7 +182,8 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
 
         out = extremize_exps_dataset(dataset=df, exp_func_type=LimeExpFunc, target_column=target,
                                      f_sensitive=sensitive_features, seed=s)
-        out.to_csv(f'output/sep/testtrain{df_name}_LIME_output_seed{s}.csv')
+        date = datetime.today().strftime('%m_%d')
+        out.to_csv(f'output/sep/{df_name}_LIME_output_seed{s}_{date}.csv')
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 

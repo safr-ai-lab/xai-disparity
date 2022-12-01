@@ -11,9 +11,11 @@ import argparse
 
 
 parser = argparse.ArgumentParser(description='Locally separable run')
+parser.add_argument('lam', type=float)
 parser.add_argument('--dummy', action='store_true')
 parser.add_argument('--cuda', action='store_true')
 args = parser.parse_args()
+lam = args.lam
 dummy = args.dummy
 useCUDA = args.cuda
 
@@ -37,7 +39,6 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
     :param minimize: Boolean -- are we minimizing or maximizing
     :return: a loss function for our particular WLS problem.
     """
-    lam = 1
     # TODO: investigate minimize/maximize boolean
     x = remove_intercept_column(x_0)
 
@@ -199,13 +200,12 @@ def find_extreme_subgroups(dataset: pd.DataFrame, alpha: float, target_column: s
         try:
             _, assigns_train, params = train_and_return(x_train, y_train, feature_num, total_exp_train, f_sensitive, alpha)
             furthest_exp_train, _ = final_value(x_train, y_train, params, feature_num)
-            print(furthest_exp_train)
-            subgroup_size_train = [round(a) for a in assigns_train].count(1)/len(assigns_train)
+            subgroup_size_train = sum(assigns_train)/len(assigns_train)
             if not (np.isnan(furthest_exp_train)):
                 x_test_ni = remove_intercept_column(x_test)
                 total_exp = initial_value(x_test_ni, y_test, feature_num)
                 furthest_exp, assigns = final_value(x_test, y_test, params, feature_num)
-                subgroup_size = [round(a) for a in assigns].count(1) / len(assigns)
+                subgroup_size = sum(assigns)/len(assigns)
                 errors_and_weights.append((furthest_exp, feature_num))
                 print(furthest_exp, feature_num)
                 params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
@@ -271,7 +271,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
         final_df = pd.concat([final_df, out])
 
     date = datetime.today().strftime('%m_%d')
-    fname = f'output/nonsep/{df_name}_output_{date}.csv'
+    fname = f'output/nonsep/{df_name}_output_{date}_lam{lam}.csv'
     final_df.to_csv(fname)
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
@@ -287,13 +287,13 @@ run_system(df, target, sensitive_features, df_name, dummy)
 # df = pd.read_csv('data/compas/compas_cleaned.csv')
 # target = 'two_year_recid'
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-# df_name = 'compas'
+# df_name = 'compas_recid'
 # run_system(df, target, sensitive_features, df_name, dummy)
 
 # df = pd.read_csv('data/compas/compas_cleaned_decile.csv')
 # target = 'decile_score'
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-# df_name = 'compas'
+# df_name = 'compas_decile'
 # run_system(df, target, sensitive_features, df_name, dummy)
 
 # df = BankDataset().convert_to_dataframe()[0]
@@ -302,7 +302,7 @@ run_system(df, target, sensitive_features, df_name, dummy)
 # df_name = 'bank'
 # run_system(df, target, sensitive_features, df_name, dummy)
 
-# df = pd.read_csv('data/folktables/ACSIncome_MI_2018_sampled.csv')
+# df = pd.read_csv('data/folktables/ACSIncome_MI_2018_new.csv')
 # target = 'PINCP'
 # sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
 #                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
