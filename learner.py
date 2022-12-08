@@ -9,7 +9,7 @@ class Learner:
         self.y = y
         self.predictor = predictor
 
-    def best_response(self, costs_0, costs_1, minimize):
+    def best_response(self, costs_0, costs_1, minimize=True):
         """Solve the CSC problem for the learner."""
         reg0 = copy.deepcopy(self.predictor)
         reg0.fit(self.X, costs_0)

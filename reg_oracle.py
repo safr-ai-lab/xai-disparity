@@ -3,7 +3,7 @@ from sklearn.linear_model import LinearRegression
 class RegOracle:
     """Class RegOracle, linear threshold classifier."""
 
-    def __init__(self, b0, b1, minimize=False):
+    def __init__(self, b0, b1, minimize=True):
         """
 
         :param b0: an oracle for the cost of assigning 0

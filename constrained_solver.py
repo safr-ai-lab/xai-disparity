@@ -8,7 +8,7 @@ class ConstrainedSolver:
     :param alpha_L: maximum size desired for subgroup
     :param B: weighted bound of the constraint penalty
     """
-    def __init__(self, expFunc, alpha_s, alpha_L, B, nu=.1):
+    def __init__(self, expFunc, alpha_s, alpha_L, B, nu):
         self.expFunc = expFunc
         self.alpha_s = alpha_s
         self.alpha_L = alpha_L
@@ -61,11 +61,14 @@ class ConstrainedSolver:
         return lam
 
     # Solves best classifier response of Learner given avg lambdas
-    def best_g(self, learner, feature_num, lams, minimize):
+    def best_g(self, learner, feature_num, lams, minimize=True):
         costs0 = [0 for _ in range(len(learner.X))]
-        costs1 = [self.expFunc.exps[i][feature_num]-lams[0]+lams[1] for i in range(len(learner.X))]
+        if minimize:
+            costs1 = [self.expFunc.exps[i][feature_num]-lams[0]+lams[1] for i in range(len(learner.X))]
+        else:
+            costs1 = [-self.expFunc.exps[i][feature_num]-lams[0]+lams[1] for i in range(len(learner.X))]
 
-        l_response = learner.best_response(costs0, costs1, minimize)
+        l_response = learner.best_response(costs0, costs1)
         return l_response
 
     # Returns value of the Lagrangian
