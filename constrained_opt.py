@@ -25,10 +25,10 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
     solver = ConstrainedSolver(exp_func, alpha_s=.1, alpha_L=.5, B=10*exp_order, nu=.1)
     v = .01*exp_order
 
-    #x_sensitive = x[:,f_sensitive]
+    x_sensitive = x[:,f_sensitive]
     costs0 = [0 for _ in range(len(x))] # costs0 is always zeros
-    #learner = Learner(x_sensitive, y, linear_model.LinearRegression())
-    learner = Learner(x, y, linear_model.LinearRegression())
+    learner = Learner(x_sensitive, y, linear_model.LinearRegression())
+    #learner = Learner(x, y, linear_model.LinearRegression())
 
     _ = 1
     while solver.v_t > v:
@@ -47,8 +47,8 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
         l_response = learner.best_response(costs0, costs1)
         solver.g_history.append(l_response)
 
-        #assigns, expressivity = l_response.predict(x_sensitive)
-        assigns, cost = l_response.predict(x)
+        assigns, cost = l_response.predict(x_sensitive)
+        #assigns, cost = l_response.predict(x)
         expressivity = exp_func.get_total_exp(assigns, feature_num)
         solver.pred_history.append(np.array(assigns))
         solver.exp_history.append(expressivity)
@@ -59,8 +59,8 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
 
         avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
         best_g = solver.best_g(learner, feature_num, avg_lam, minimize)
-        #best_g_assigns, best_g_exps = best_g.predict(x_sensitive)
-        best_g_assigns, best_g_exps = best_g.predict(x)
+        best_g_assigns, best_g_exps = best_g.predict(x_sensitive)
+        #best_g_assigns, best_g_exps = best_g.predict(x)
         if not minimize:
             best_g_exps *= -1
         L_floor = solver.lagrangian(best_g_assigns, avg_lam, feature_num)
@@ -140,7 +140,7 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
     # ^Temporary code, delete later^
 
     for feature_num in range(len(x_train[0])):
-    #for feature_num in range(2):
+    #for feature_num in range(1):
         print('*****************')
         print(train_df.columns[feature_num])
         total_exp_train = full_dataset_expressivity(exp_func_train, feature_num)
@@ -168,29 +168,29 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
         # compute test values
         total_exp_test = full_dataset_expressivity(exp_func_test, feature_num)
         #assigns_test = get_avg_prediction(best_model, x_test) # mix model method
-        #assigns_test = best_model.predict(x_test[:,f_sensitive])[0] # sensitive features only method
-        assigns_test = best_model.predict(x_test)[0]
+        assigns_test = best_model.predict(x_test[:,f_sensitive])[0] # sensitive features only method
+        #assigns_test = best_model.predict(x_test)[0]
         subgroup_size_test = sum(assigns_test)/len(assigns_test)
         furthest_exp_test = 0
         for i in range(len(assigns_test)):
             furthest_exp_test += assigns_test[i]*exp_func_test.exps[i][feature_num]
 
         # # from mix models, pick model with largest exp diff that is valid
-        # params = best_model.b1.coef_
-        # params_with_labels = {dataset.columns[i]: float(param) for (i, param) in zip(f_sensitive, params)}
-        # #print(params_with_labels)
-        #
-        # out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
-        #                                                         'F(D)': total_exp_test,
-        #                                                         'max(F(S))': furthest_exp_test,
-        #                                                         'Difference': abs(furthest_exp_test - total_exp_test),
-        #                                                         'Subgroup Coefficients': params_with_labels,
-        #                                                         'Subgroup Size': subgroup_size_test,
-        #                                                         'Direction': direction,
-        #                                                         'F(D)_train': total_exp_train,
-        #                                                         'max(F(S))_train': furthest_exp_train,
-        #                                                         'Difference_train': abs(furthest_exp_train-total_exp_train),
-        #                                                         'Subgroup Size_train': subgroup_size_train}])])
+        params = best_model.b1.coef_
+        params_with_labels = {dataset.columns[i]: float(param) for (i, param) in zip(f_sensitive, params)}
+        print(params_with_labels)
+
+        out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
+                                                                'F(D)': total_exp_test,
+                                                                'max(F(S))': furthest_exp_test,
+                                                                'Difference': abs(furthest_exp_test - total_exp_test),
+                                                                'Subgroup Coefficients': params_with_labels,
+                                                                'Subgroup Size': subgroup_size_test,
+                                                                'Direction': direction,
+                                                                'F(D)_train': total_exp_train,
+                                                                'max(F(S))_train': furthest_exp_train,
+                                                                'Difference_train': abs(furthest_exp_train-total_exp_train),
+                                                                'Subgroup Size_train': subgroup_size_train}])])
 
     return out_df
 
@@ -216,7 +216,8 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
                                      f_sensitive=f_sensitive, seed=s)
 
         date = datetime.today().strftime('%m_%d')
-        out.to_csv(f'output_constrained/{df_name}_output_seed{s}_{date}.csv')
+        out.head()
+        #out.to_csv(f'output_constrained/{df_name}_output_seed{s}_{date}.csv')
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
@@ -224,9 +225,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
 df = pd.read_csv('data/student/student_cleaned.csv')
 target = 'G3'
 sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
-#sensitive_features = list(df.columns)
-#sensitive_features.remove('G3')
-#print(sensitive_features)
+# sensitive_features = list(df.columns).remove('G3')
 df_name = 'student'
 run_system(df, target, sensitive_features, df_name, dummy)
 

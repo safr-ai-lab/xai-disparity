@@ -90,7 +90,7 @@ class ConstrainedSolver:
             if self.phi_s(assigns) + self.phi_L(assigns) == 0:
                 valids.append(i)
         if len(valids) == 0:
-            pdb.set_trace()
+            valids.append(0)
         return valids
 
     @staticmethod
