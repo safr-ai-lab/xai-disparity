@@ -33,3 +33,9 @@ class LimeExpFunc:
             print("Expressivity dict empty. Populating now...")
             self.populate_exps()
         return self.exps[row][feature]
+
+    def get_total_exp(self, assigns, feature_num):
+        total_expressivity = 0
+        for i in range(len(assigns)):
+            total_expressivity += assigns[i] * self.exps[i][feature_num]
+        return total_expressivity

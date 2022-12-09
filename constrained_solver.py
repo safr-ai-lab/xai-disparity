@@ -1,3 +1,5 @@
+import pdb
+
 import numpy as np
 
 class ConstrainedSolver:
@@ -81,3 +83,29 @@ class ConstrainedSolver:
         constraint_terms = self.phi_s(assigns) * lambda_s + self.phi_L(assigns) * lambda_L
         return L + constraint_terms
 
+    def get_valid_model_i(self):
+        valids = []
+        for i in range(len(self.pred_history)):
+            assigns = self.pred_history[i]
+            if self.phi_s(assigns) + self.phi_L(assigns) == 0:
+                valids.append(i)
+        if len(valids) == 0:
+            pdb.set_trace()
+        return valids
+
+    @staticmethod
+    def minimize_to_sign(minimize):
+        if minimize:
+            return 1
+        else:
+            return -1
+
+    def get_best_valid_model(self, minimize):
+        valids = self.get_valid_model_i()
+        sign = self.minimize_to_sign(minimize)
+        best_i = valids[0]
+        best_exp = self.exp_history[best_i]
+        for i in valids:
+            if sign*self.exp_history[i] <= best_exp:
+                best_i = i
+        return self.g_history[best_i], self.pred_history[best_i], self.exp_history[best_i]

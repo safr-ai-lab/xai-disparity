@@ -23,7 +23,7 @@ dummy = args.dummy
 def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
     exp_order = np.mean([abs(exp_func.exps[i][feature_num]) for i in range(len(x))])
     solver = ConstrainedSolver(exp_func, alpha_s=.1, alpha_L=.5, B=10*exp_order, nu=.1)
-    v = exp_order
+    v = .01*exp_order
 
     #x_sensitive = x[:,f_sensitive]
     costs0 = [0 for _ in range(len(x))] # costs0 is always zeros
@@ -48,7 +48,8 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
         solver.g_history.append(l_response)
 
         #assigns, expressivity = l_response.predict(x_sensitive)
-        assigns, expressivity = l_response.predict(x)
+        assigns, cost = l_response.predict(x)
+        expressivity = exp_func.get_total_exp(assigns, feature_num)
         solver.pred_history.append(np.array(assigns))
         solver.exp_history.append(expressivity)
 
@@ -71,23 +72,18 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
         _ += 1
 
     ### method 1: Returning average model
-    print('num iterations: ', _)
-    avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
-    avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
-    final_expressivity = 0
-    for i in range(len(avg_pred)):
-        final_expressivity += avg_pred[i]*exp_func.exps[i][feature_num]
-    return solver.g_history, avg_pred, final_expressivity
+    # print('num iterations: ', _-1)
+    # avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
+    # avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
+    # final_expressivity = 0
+    # for i in range(len(avg_pred)):
+    #     final_expressivity += avg_pred[i]*exp_func.exps[i][feature_num]
+    # return solver.g_history, avg_pred, final_expressivity
 
     ### method 2: Returning best valid model
-    # print('num iterations: ', _)
-    # best_model, best_assigns, best_exp = solver.g_history[0], solver.pred_history[0], solver.exp_history[0]
-    # for i in range(len(solver.pred_history)):
-    #     assigns = solver.pred_history[i]
-    #     exp = solver.exp_history[i]
-    #     if solver.phi_s(assigns)+solver.phi_L(assigns) != 0 and exp < best_exp:
-    #         best_model, best_assigns, best_exp = solver.g_history[i], assigns, exp
-    # return best_model, best_assigns, best_exp
+    print('num iterations: ', _-1)
+    best_model, best_assigns, best_exp = solver.get_best_valid_model(minimize)
+    return best_model, best_assigns, best_exp
 
 # Given distribution of models, compute predictions on x and return average
 def get_avg_prediction(mix_models, x):
@@ -144,7 +140,8 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
     # ^Temporary code, delete later^
 
     for feature_num in range(len(x_train[0])):
-    #for feature_num in range(1):
+    #for feature_num in range(2):
+        print('*****************')
         print(train_df.columns[feature_num])
         total_exp_train = full_dataset_expressivity(exp_func_train, feature_num)
         print('total exp: ', total_exp_train)
@@ -170,8 +167,9 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
 
         # compute test values
         total_exp_test = full_dataset_expressivity(exp_func_test, feature_num)
-        assigns_test = get_avg_prediction(best_model, x_test)
-        #assigns_test = best_model.predict(x_test[:,f_sensitive])[0]
+        #assigns_test = get_avg_prediction(best_model, x_test) # mix model method
+        #assigns_test = best_model.predict(x_test[:,f_sensitive])[0] # sensitive features only method
+        assigns_test = best_model.predict(x_test)[0]
         subgroup_size_test = sum(assigns_test)/len(assigns_test)
         furthest_exp_test = 0
         for i in range(len(assigns_test)):
