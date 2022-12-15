@@ -42,8 +42,8 @@ df_name = 'compas_decile'
 new_cols = [col for col in df.columns if col != target] + [target]
 df = df[new_cols]
 train_df, test_df = train_test_split(df, test_size=0.5, random_state=seed)
-x_train, y_train, sensitive_train = split_out_dataset(train_df, target, sensitive_features)
-x_test, y_test, sensitive_test = split_out_dataset(test_df, target, sensitive_features)
+x_train, y_train = split_out_dataset(train_df, target)
+x_test, y_test = split_out_dataset(test_df, target)
 classifier = RandomForestClassifier(random_state=seed)
 classifier.fit(x_train, y_train)
 

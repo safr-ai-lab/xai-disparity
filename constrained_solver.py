@@ -74,12 +74,15 @@ class ConstrainedSolver:
         return l_response
 
     # Returns value of the Lagrangian
-    def lagrangian(self, assigns, lams, feature_num):
+    def lagrangian(self, assigns, lams, feature_num, minimize):
+        sign = 1
+        if not minimize:
+            sign = -1
         lambda_s = lams[0]
         lambda_L = lams[1]
         L = 0
         for i in range(len(assigns)):
-            L += assigns[i] * self.expFunc.get_exp(row=i, feature=feature_num)
+            L += assigns[i] * sign * self.expFunc.get_exp(row=i, feature=feature_num)
         constraint_terms = self.phi_s(assigns) * lambda_s + self.phi_L(assigns) * lambda_L
         return L + constraint_terms
 
@@ -90,6 +93,7 @@ class ConstrainedSolver:
             if self.phi_s(assigns) + self.phi_L(assigns) == 0:
                 valids.append(i)
         if len(valids) == 0:
+            print('NOTHING VALID HERE!!!')
             valids.append(0)
         return valids
 

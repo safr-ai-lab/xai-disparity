@@ -22,7 +22,7 @@ dummy = args.dummy
 
 def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
     exp_order = np.mean([abs(exp_func.exps[i][feature_num]) for i in range(len(x))])
-    solver = ConstrainedSolver(exp_func, alpha_s=.1, alpha_L=.5, B=10*exp_order, nu=.1)
+    solver = ConstrainedSolver(exp_func, alpha_s=.1, alpha_L=.5, B=10000*exp_order, nu=.00001)
     v = .01*exp_order
 
     x_sensitive = x[:,f_sensitive]
@@ -37,40 +37,43 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
             print(sum(assigns)/len(assigns))
             print(solver.v_t, ' | ',v)
         solver.update_lambdas()
-        avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
-        if minimize:
-            costs1 = [exp_func.exps[i][feature_num]-avg_lam[0]+avg_lam[1] for i in range(len(x))]
-        else:
-            costs1 = [-exp_func.exps[i][feature_num]-avg_lam[0]+avg_lam[1] for i in range(len(x))]
 
         # CSC solver, returns regoracle fit using costs0/costs1
+        # h_t <- Best_h(lam_t)
+        current_lam = solver.lambda_history[-1]
+        if minimize:
+            costs1 = [exp_func.exps[i][feature_num]-current_lam[0]+current_lam[1] for i in range(len(x))]
+        else:
+            costs1 = [-exp_func.exps[i][feature_num]-current_lam[0]+current_lam[1] for i in range(len(x))]
         l_response = learner.best_response(costs0, costs1)
         solver.g_history.append(l_response)
 
         assigns, cost = l_response.predict(x_sensitive)
-        #assigns, cost = l_response.predict(x)
         expressivity = exp_func.get_total_exp(assigns, feature_num)
         solver.pred_history.append(np.array(assigns))
         solver.exp_history.append(expressivity)
 
+        # Q^ <- avg(h_t), L_ceiling <- L(Q^, best_lam(Q^))
         avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
         best_lam = solver.best_lambda(avg_pred)
-        L_ceiling = solver.lagrangian(avg_pred, best_lam, feature_num)
+        L_ceiling = solver.lagrangian(avg_pred, best_lam, feature_num, minimize)
 
+        # lam^ <- avg(lambda), L_floor <- L(best_h(lam^), lam^)
         avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
+        #print('avg_lam: ', avg_lam, ' | best_lam: ', best_lam, '| current lam: ', current_lam)
         best_g = solver.best_g(learner, feature_num, avg_lam, minimize)
-        best_g_assigns, best_g_exps = best_g.predict(x_sensitive)
-        #best_g_assigns, best_g_exps = best_g.predict(x)
-        if not minimize:
-            best_g_exps *= -1
-        L_floor = solver.lagrangian(best_g_assigns, avg_lam, feature_num)
+        best_g_assigns, best_g_costs = best_g.predict(x_sensitive)
+        best_g_exps = exp_func.get_total_exp(best_g_assigns, feature_num)
+        L_floor = solver.lagrangian(best_g_assigns, avg_lam, feature_num, minimize)
 
-        L = solver.lagrangian(avg_pred, avg_lam, feature_num)
+        L = solver.lagrangian(avg_pred, avg_lam, feature_num, minimize)
         solver.v_t = max(L-L_floor, L_ceiling-L)
+        #print(np.mean(assigns), np.mean(best_g_assigns), np.mean(avg_pred))
+        #print(L, L_floor, L_ceiling)
+        #solver.v_t = max(abs(L-L_floor), abs(L_ceiling-L))
 
         solver.update_thetas(assigns)
         _ += 1
-
     ### method 1: Returning average model
     # print('num iterations: ', _-1)
     # avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
@@ -113,7 +116,11 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
     :param seed: int, random seed
     :return: total expressivity over these rows
     """
-    train_df, test_df = train_test_split(dataset, test_size=0.5, random_state=seed)
+    if target_column == 'G3':
+        t_split = .5
+    else:
+        t_split = .2
+    train_df, test_df = train_test_split(dataset, test_size=t_split, random_state=seed)
     x_train, y_train = split_out_dataset(train_df, target_column)
     x_test, y_test = split_out_dataset(test_df, target)
     classifier = RandomForestClassifier(random_state=seed)
@@ -140,7 +147,6 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
     # ^Temporary code, delete later^
 
     for feature_num in range(len(x_train[0])):
-    #for feature_num in range(1):
         print('*****************')
         print(train_df.columns[feature_num])
         total_exp_train = full_dataset_expressivity(exp_func_train, feature_num)
@@ -163,7 +169,7 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
             assigns_train = min_assigns
             best_model = min_model
             direction = 'minimize'
-        subgroup_size_train = sum(assigns_train)/len(assigns_train)
+        subgroup_size_train = np.mean(assigns_train)
 
         # compute test values
         total_exp_test = full_dataset_expressivity(exp_func_test, feature_num)
@@ -217,17 +223,17 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
 
         date = datetime.today().strftime('%m_%d')
         out.head()
-        #out.to_csv(f'output_constrained/{df_name}_output_seed{s}_{date}.csv')
+        out.to_csv(f'output_constrained/{df_name}_output_seed{s}_{date}.csv')
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
 
 
-df = pd.read_csv('data/student/student_cleaned.csv')
-target = 'G3'
-sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
-# sensitive_features = list(df.columns).remove('G3')
-df_name = 'student'
-run_system(df, target, sensitive_features, df_name, dummy)
+# df = pd.read_csv('data/student/student_cleaned.csv')
+# target = 'G3'
+# sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
+# # sensitive_features = list(df.columns).remove('G3')
+# df_name = 'student'
+# run_system(df, target, sensitive_features, df_name, dummy)
 
 # df = pd.read_csv('data/compas/compas_cleaned.csv')
 # target = 'two_year_recid'
@@ -235,8 +241,8 @@ run_system(df, target, sensitive_features, df_name, dummy)
 # df_name = 'compas_recid'
 # run_system(df, target, sensitive_features, df_name, dummy)
 
-# df = pd.read_csv('data/compas/compas_cleaned_decile.csv')
-# target = 'decile_score'
-# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-# df_name = 'compas_decile'
-# run_system(df, target, sensitive_features, df_name, dummy)
+df = pd.read_csv('data/compas/compas_cleaned_decile.csv')
+target = 'decile_score'
+sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
+df_name = 'compas_decile'
+run_system(df, target, sensitive_features, df_name, dummy)
