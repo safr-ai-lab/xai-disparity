@@ -23,7 +23,7 @@ dummy = args.dummy
 def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
     exp_order = np.mean([abs(exp_func.exps[i][feature_num]) for i in range(len(x))])
     solver = ConstrainedSolver(exp_func, alpha_s=.1, alpha_L=.5, B=10000*exp_order, nu=.00001)
-    v = .01*exp_order
+    v = .01*exp_order*len(x)
 
     x_sensitive = x[:,f_sensitive]
     costs0 = [0 for _ in range(len(x))] # costs0 is always zeros
@@ -67,11 +67,12 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
         L_floor = solver.lagrangian(best_g_assigns, avg_lam, feature_num, minimize)
 
         L = solver.lagrangian(avg_pred, avg_lam, feature_num, minimize)
-        solver.v_t = max(L-L_floor, L_ceiling-L)
         #print(np.mean(assigns), np.mean(best_g_assigns), np.mean(avg_pred))
         #print(L, L_floor, L_ceiling)
-        #solver.v_t = max(abs(L-L_floor), abs(L_ceiling-L))
+        solver.v_t = max(abs(L-L_floor), abs(L_ceiling-L))
 
+        if solver.phi_s(assigns)+solver.phi_L(assigns) == 0:
+            solver.v_t = 0
         solver.update_thetas(assigns)
         _ += 1
     ### method 1: Returning average model
