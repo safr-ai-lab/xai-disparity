@@ -35,10 +35,15 @@ seed = 0
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 # df_name = 'compas_decile'
 
-df = BankDataset().convert_to_dataframe()[0]
-target = 'y'
-sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
-df_name = 'bank'
+df = pd.read_csv('data/compas/compas_decile_stripped.csv')
+target = 'decile_score'
+sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
+df_name = 'compas_decile'
+
+# df = BankDataset().convert_to_dataframe()[0]
+# target = 'y'
+# sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
+# df_name = 'bank'
 
 # df = pd.read_csv('data/folktables/ACSIncome_MI_2018_new.csv')
 # target = 'PINCP'
@@ -49,7 +54,7 @@ df_name = 'bank'
 print('starting')
 new_cols = [col for col in df.columns if col != target] + [target]
 df = df[new_cols]
-train_df, test_df = train_test_split(df, test_size=0.2, random_state=seed)
+train_df, test_df = train_test_split(df, test_size=0.5, random_state=seed)
 x_train, y_train = split_out_dataset(train_df, target)
 x_test, y_test = split_out_dataset(test_df, target)
 print('training classifier')
@@ -62,14 +67,14 @@ print("Populating train expressivity values")
 exp_func_train.populate_exps()
 print("runtime train: ", time.time()-start)
 
+with open(f'data/exps/{df_name}_train_seed{seed}', 'w') as fout:
+    json.dump(exp_func_train.exps, fout)
+
 start = time.time()
 exp_func_test = LimeExpFunc(classifier, x_test, seed)
 print("Populating test expressivity values")
 exp_func_test.populate_exps()
 print("runtime test: ", time.time()-start)
-
-with open(f'data/exps/{df_name}_train_seed{seed}', 'w') as fout:
-    json.dump(exp_func_train.exps, fout)
 
 with open(f'data/exps/{df_name}_test_seed{seed}', 'w') as fout:
     json.dump(exp_func_test.exps, fout)
