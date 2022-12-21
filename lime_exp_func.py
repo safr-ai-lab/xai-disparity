@@ -14,6 +14,8 @@ class LimeExpFunc:
     def populate_exps(self):
         i = 0
         for row in self.dataset:
+            if i % 100 == 0:
+                print(i, '/', len(self.dataset))
             #print('Computing ', i)
             exp_i = self.lime_exp.explain_instance(row, self.classifier.predict_proba, num_features=row.shape[0]).as_list()
             exp_dict = {}

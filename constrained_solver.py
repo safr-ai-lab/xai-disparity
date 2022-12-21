@@ -49,8 +49,8 @@ class ConstrainedSolver:
     # using most recent classifier assignments, update thetas based on constraint violations
     def update_thetas(self, assigns):
         theta = self.thetas[-1]
-        s_violation = self.nu*(self.alpha_s - (sum(assigns)/len(assigns)))
-        L_violation = self.nu*((sum(assigns)/len(assigns)) - self.alpha_L)
+        s_violation = self.nu*(self.alpha_s - np.mean(assigns))
+        L_violation = self.nu*(np.mean(assigns) - self.alpha_L)
         self.thetas.append([theta[0]+s_violation, theta[1]+L_violation])
 
     # Solves the best lambda response of Auditor given mixture of classifiers
@@ -94,7 +94,7 @@ class ConstrainedSolver:
                 valids.append(i)
         if len(valids) == 0:
             print('NOTHING VALID HERE!!!')
-            valids.append(0)
+            valids.append(len(self.pred_history)-1)
         return valids
 
     @staticmethod

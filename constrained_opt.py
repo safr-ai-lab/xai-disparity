@@ -20,9 +20,9 @@ args = parser.parse_args()
 dummy = args.dummy
 
 
-def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
+def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
     exp_order = np.mean([abs(exp_func.exps[i][feature_num]) for i in range(len(x))])
-    solver = ConstrainedSolver(exp_func, alpha_s=.1, alpha_L=.5, B=10000*exp_order, nu=.00001)
+    solver = ConstrainedSolver(exp_func, alpha_s=alphas[0], alpha_L=alphas[1], B=10000*exp_order, nu=.000001)
     v = .01*exp_order*len(x)
 
     x_sensitive = x[:,f_sensitive]
@@ -73,6 +73,9 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize):
 
         if solver.phi_s(assigns)+solver.phi_L(assigns) == 0:
             solver.v_t = 0
+        if _%1000 == 0:
+            print('Max iterations reached')
+            solver.v_t = 0
         solver.update_thetas(assigns)
         _ += 1
     ### method 1: Returning average model
@@ -108,7 +111,8 @@ def split_out_dataset(dataset, target_column):
     return x, y
 
 
-def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
+def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas, seed=0):
+    np.random.seed(seed)
     """
     :param dataset: pandas dataframe
     :param exp_func: class for expressivities
@@ -153,10 +157,10 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
         total_exp_train = full_dataset_expressivity(exp_func_train, feature_num)
         print('total exp: ', total_exp_train)
         min_model, min_assigns, min_exp = argmin_g(x_train, y_train, feature_num, f_sensitive, exp_func_train,
-                                                   minimize=True)
+                                                   minimize=True, alphas=alphas)
         print('min exp', min_exp, '| size', sum(min_assigns) / len(min_assigns))
         max_model, max_assigns, max_exp = argmin_g(x_train, y_train, feature_num, f_sensitive, exp_func_train,
-                                                   minimize=False)
+                                                   minimize=False, alphas=alphas)
         print('max exp', max_exp, '| size', sum(max_assigns)/len(max_assigns))
 
         # Choose max difference
@@ -177,7 +181,7 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
         #assigns_test = get_avg_prediction(best_model, x_test) # mix model method
         assigns_test = best_model.predict(x_test[:,f_sensitive])[0] # sensitive features only method
         #assigns_test = best_model.predict(x_test)[0]
-        subgroup_size_test = sum(assigns_test)/len(assigns_test)
+        subgroup_size_test = np.mean(assigns_test)
         furthest_exp_test = 0
         for i in range(len(assigns_test)):
             furthest_exp_test += assigns_test[i]*exp_func_test.exps[i][feature_num]
@@ -188,9 +192,12 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, seed):
         print(params_with_labels)
 
         out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
+                                                                'Alpha': alphas,
                                                                 'F(D)': total_exp_test,
                                                                 'max(F(S))': furthest_exp_test,
                                                                 'Difference': abs(furthest_exp_test - total_exp_test),
+                                                                'avg(F(D))': total_exp_test/len(assigns_test),
+                                                                'avg(F(S))': furthest_exp_test/(sum(assigns_test)+.0001),
                                                                 'Subgroup Coefficients': params_with_labels,
                                                                 'Subgroup Size': subgroup_size_test,
                                                                 'Direction': direction,
@@ -213,19 +220,17 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
 
     f_sensitive = list(df.columns.get_indexer(sensitive_features))
 
-    seeds = [0]
-    for s in seeds:
-        np.random.seed(s)
-        print("Running", df_name, ", Seed =", s)
+    final_df = pd.DataFrame()
+    alpha_ranges = [[.01,.05],[.05,.1],[.1,.15],[.15,.2]]
+    for a in alpha_ranges:
+        print("Running", df_name, ", Alphas =", a)
         start = time.time()
-
         out = extremize_exps_dataset(dataset=df, exp_func=LimeExpFunc, target_column=target,
-                                     f_sensitive=f_sensitive, seed=s)
-
-        date = datetime.today().strftime('%m_%d')
-        out.head()
-        out.to_csv(f'output_constrained/{df_name}_output_seed{s}_{date}.csv')
+                                     f_sensitive=f_sensitive, alphas=a)
+        final_df = pd.concat([final_df, out])
         print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+    date = datetime.today().strftime('%m_%d')
+    final_df.to_csv(f'output_constrained/{df_name}_output_{date}.csv')
     return 1
 
 
