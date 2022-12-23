@@ -234,11 +234,11 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
 # df_name = 'student'
 # run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
-df = pd.read_csv('data/compas/compas_decile_stripped.csv')
+df = pd.read_csv('data/compas/compas_decile.csv')
 target = 'decile_score'
 t_split = .5
 sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-df_name = 'stripped_compas_decile'
+df_name = 'compas_decile'
 run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = BankDataset().convert_to_dataframe()[0]
