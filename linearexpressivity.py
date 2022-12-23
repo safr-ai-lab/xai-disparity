@@ -171,7 +171,7 @@ def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, featur
     denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ diag @ y))).cpu().detach().numpy()[0], one_d.cpu().detach().numpy()
 
-def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: str, f_sensitive: list):
+def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: str, f_sensitive: list, t_split: float):
     """
     Given a dataset, finds the differential expressivity and maximal subset over all features.
     Saves that subset to a file.
@@ -183,7 +183,7 @@ def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: st
     """
     out_df = pd.DataFrame()
 
-    train_df, test_df = train_test_split(dataset, test_size=.2, random_state=seed)
+    train_df, test_df = train_test_split(dataset, test_size=t_split, random_state=seed)
 
     if useCUDA:
         y_train = torch.tensor(train_df[target_column].values).float().cuda()
@@ -247,7 +247,7 @@ def remove_intercept_column(x):
         out = out.cuda()
     return out
 
-def run_system(df, target, sensitive_features, df_name, dummy=False):
+def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5):
     if dummy:
         df[target] = df[target].sample(frac=1).values
         df_name = 'dummy_' + df_name
@@ -271,7 +271,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
     alphas = [[.1,.15]]
     for a in alphas:
         print("Running", df_name, ", Alpha =", a)
-        out = find_extreme_subgroups(df, alpha=a, target_column=target, f_sensitive=f_sensitive)
+        out = find_extreme_subgroups(df, alpha=a, target_column=target, f_sensitive=f_sensitive, t_split=t_split)
         final_df = pd.concat([final_df, out])
 
     date = datetime.today().strftime('%m_%d')
@@ -284,32 +284,37 @@ seed = 0
 
 df = pd.read_csv('data/student/student_cleaned.csv')
 target = 'G3'
+t_split = .5
 sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
 df_name = 'student'
-run_system(df, target, sensitive_features, df_name, dummy)
+run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = pd.read_csv('data/compas/compas_recid.csv')
 # target = 'two_year_recid'
+# t_split = .5
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 # df_name = 'compas_recid'
-# run_system(df, target, sensitive_features, df_name, dummy)
+# run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = pd.read_csv('data/compas/compas_decile.csv')
 # target = 'decile_score'
+# t_split = .5
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 # df_name = 'compas_decile'
-# run_system(df, target, sensitive_features, df_name, dummy)
+# run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = BankDataset().convert_to_dataframe()[0]
 # target = 'y'
+# t_split = .2
 # sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
 # df_name = 'bank'
-# run_system(df, target, sensitive_features, df_name, dummy)
+# run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = pd.read_csv('data/folktables/ACSIncome_MI_2018_new.csv')
 # target = 'PINCP'
+# t_split = .2
 # sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
 #                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
 # df_name = 'folktables'
-# run_system(df, target, sensitive_features, df_name, dummy)
+# run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
