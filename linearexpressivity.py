@@ -27,7 +27,7 @@ else:
 
 
 def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, feature_num: int,
-                      sensitives: torch.Tensor, alpha: float):
+                      sensitives: torch.Tensor, alpha: list):
     """
     Factory for the loss function that pytorch runs will be optimizing in WLS
     :param x_0: the data tensor with intercept column
@@ -44,7 +44,7 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
 
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.001 for _ in range(x.shape[1])]
+    flat_list = [0.00001 for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -63,7 +63,9 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
         denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
         difference_penalty = torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val)
 
-        size_penalty = lam*torch.abs((torch.sum(one_d)/x.shape[0])-alpha)
+        #size_penalty = lam*torch.abs((torch.sum(one_d)/x.shape[0])-alpha)
+        size = torch.sum(one_d)/x.shape[0]
+        size_penalty = lam*(max(alpha[0]-size, 0) + max(size-alpha[1], 0))
         # we want to maximize difference penalty but minimize size penalty
         return size_penalty - difference_penalty
 
@@ -71,7 +73,7 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
 
 
 def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial_val: float,
-                     f_sensitive: list, alpha: float):
+                     f_sensitive: list, alpha: list):
     """
     Given an x, y, feature num, and the expressivity over the whole dataset,
     returns the differential expressivity and maximal subset for that feature
@@ -110,7 +112,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     params_max = sensitives * params_max
     max_error = curr_error * -1
     assigns = (sigmoid(x @ params_max)).cpu().detach().numpy()
-    print(torch.sum(sigmoid(x @ params_max))/x.shape[0])
+    print('final train size: ',torch.sum(sigmoid(x @ params_max))/x.shape[0])
     #print(max_error, initial_val, assigns[assigns >= 0.02])
     return max_error, assigns, params_max.cpu().detach().numpy()
 
@@ -125,7 +127,7 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.001 for _ in range(x.shape[1])]
+    flat_list = [0.00001 for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -136,7 +138,8 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
         basis = torch.tensor(basis_list, requires_grad=True)
         flat = torch.tensor(flat_list, requires_grad=True)
         x_t = torch.t(x)
-        denom = torch.inverse((x_t @ x) + torch.diag(flat))
+        #denom = torch.inverse((x_t @ x) + torch.diag(flat))
+        denom = torch.inverse((x_t @ x))
     return (basis @ (denom @ (x_t @ y))).item()
 
 def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_num: int):
@@ -151,7 +154,7 @@ def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, featur
     x = remove_intercept_column(x_0)
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.001 for _ in range(x.shape[1])]
+    flat_list = [0.00001 for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -168,7 +171,7 @@ def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, featur
     denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ diag @ y))).cpu().detach().numpy()[0], one_d.cpu().detach().numpy()
 
-def find_extreme_subgroups(dataset: pd.DataFrame, alpha: float, target_column: str, f_sensitive: list):
+def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: str, f_sensitive: list):
     """
     Given a dataset, finds the differential expressivity and maximal subset over all features.
     Saves that subset to a file.
@@ -264,7 +267,8 @@ def run_system(df, target, sensitive_features, df_name, dummy=False):
     final_df = pd.DataFrame()
 
     start = time.time()
-    alphas = [.05, .1, .2, .3, .4, .5]
+    #alphas = [[.01,.05],[.05,.1],[.1,.15],[.15,.2]]
+    alphas = [[.1,.15]]
     for a in alphas:
         print("Running", df_name, ", Alpha =", a)
         out = find_extreme_subgroups(df, alpha=a, target_column=target, f_sensitive=f_sensitive)
@@ -284,13 +288,13 @@ sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health
 df_name = 'student'
 run_system(df, target, sensitive_features, df_name, dummy)
 
-# df = pd.read_csv('data/compas/compas_cleaned.csv')
+# df = pd.read_csv('data/compas/compas_recid.csv')
 # target = 'two_year_recid'
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 # df_name = 'compas_recid'
 # run_system(df, target, sensitive_features, df_name, dummy)
 
-# df = pd.read_csv('data/compas/compas_cleaned_decile.csv')
+# df = pd.read_csv('data/compas/compas_decile.csv')
 # target = 'decile_score'
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 # df_name = 'compas_decile'
