@@ -235,11 +235,9 @@ def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: st
             if valid_max * abs(furthest_exp_max - total_exp_train) > valid_min * abs(furthest_exp_min - total_exp_train):
                 assigns_train, params, s_record, p_record = assigns_max, params_max, s_record_max, p_record_max
                 furthest_exp_train = furthest_exp_max
-                direction = 'maximize'
             else:
                 assigns_train, params, s_record, p_record = assigns_min, params_min, s_record_min, p_record_min
                 furthest_exp_train = furthest_exp_min
-                direction = 'minimize'
             subgroup_size_train = np.mean(assigns_train)
 
             x_test_ni = remove_intercept_column(x_test)
@@ -254,12 +252,13 @@ def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: st
                                                                     'F(D)': total_exp,
                                                                     'max(F(S))': furthest_exp,
                                                                     'Difference': abs(furthest_exp - total_exp),
+                                                                    'Percent Change': 100*abs(furthest_exp - total_exp)/total_exp,
                                                                     'Subgroup Coefficients': params_with_labels,
                                                                     'Subgroup Size': subgroup_size,
-                                                                    'Direction': direction,
                                                                     'F(D)_train': total_exp_train,
                                                                     'max(F(S))_train': furthest_exp_train,
                                                                     'Difference_train': abs(furthest_exp_train - total_exp_train),
+                                                                    'Percent Change_train': 100*abs(furthest_exp_train - total_exp_train)/total_exp_train,
                                                                     'Subgroup Size_train': subgroup_size_train,
                                                                     'Size record': s_record,
                                                                     'WLS Penalties': p_record}])])
