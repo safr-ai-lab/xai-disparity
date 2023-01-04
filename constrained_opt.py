@@ -22,7 +22,7 @@ dummy = args.dummy
 
 def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
     exp_order = np.mean([abs(exp_func.exps[i][feature_num]) for i in range(len(x))])
-    solver = ConstrainedSolver(exp_func, alpha_s=alphas[0], alpha_L=alphas[1], B=10000*exp_order, nu=.000001)
+    solver = ConstrainedSolver(exp_func, alpha_s=alphas[0], alpha_L=alphas[1], B=10000*exp_order, nu=.000002)
     v = .01*exp_order*len(x)
 
     x_sensitive = x[:,f_sensitive]
@@ -30,10 +30,11 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
     learner = Learner(x_sensitive, y, linear_model.LinearRegression())
 
     _ = 1
+    start2 = time.time()
     while solver.v_t > v:
         if _%100==0:
-            print("ITERATION NUMBER ", _)
-            print(sum(assigns)/len(assigns))
+            print("ITERATION NUMBER ", _, "time:", time.time()-start2)
+            print(np.mean(assigns))
             print(solver.v_t, ' | ',v)
         solver.update_lambdas()
 
@@ -52,36 +53,28 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
         solver.pred_history.append(np.array(assigns))
         solver.exp_history.append(expressivity)
 
-        # Q^ <- avg(h_t), L_ceiling <- L(Q^, best_lam(Q^))
-        avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
-        best_lam = solver.best_lambda(avg_pred)
-        L_ceiling = solver.lagrangian(avg_pred, best_lam, feature_num, minimize)
-
-        # lam^ <- avg(lambda), L_floor <- L(best_h(lam^), lam^)
-        avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
-        best_g = solver.best_g(learner, feature_num, avg_lam, minimize)
-        best_g_assigns, best_g_costs = best_g.predict(x_sensitive)
-        best_g_exps = exp_func.get_total_exp(best_g_assigns, feature_num)
-        L_floor = solver.lagrangian(best_g_assigns, avg_lam, feature_num, minimize)
-
-        L = solver.lagrangian(avg_pred, avg_lam, feature_num, minimize)
-        solver.v_t = max(abs(L-L_floor), abs(L_ceiling-L))
+        # # Q^ <- avg(h_t), L_ceiling <- L(Q^, best_lam(Q^))
+        # avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
+        # best_lam = solver.best_lambda(avg_pred)
+        # L_ceiling = solver.lagrangian(avg_pred, best_lam, feature_num, minimize)
+        #
+        # # lam^ <- avg(lambda), L_floor <- L(best_h(lam^), lam^)
+        # avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
+        # best_g = solver.best_g(learner, feature_num, avg_lam, minimize)
+        # best_g_assigns, best_g_costs = best_g.predict(x_sensitive)
+        # best_g_exps = exp_func.get_total_exp(best_g_assigns, feature_num)
+        # L_floor = solver.lagrangian(best_g_assigns, avg_lam, feature_num, minimize)
+        #
+        # L = solver.lagrangian(avg_pred, avg_lam, feature_num, minimize)
+        # solver.v_t = max(abs(L-L_floor), abs(L_ceiling-L))
 
         if solver.phi_s(assigns)+solver.phi_L(assigns) == 0:
             solver.v_t = 0
-        if _%1000 == 0:
+        if _%500 == 0:
             print('Max iterations reached')
             solver.v_t = 0
         solver.update_thetas(assigns)
         _ += 1
-    ### method 1: Returning average model
-    # print('num iterations: ', _-1)
-    # avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
-    # avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
-    # final_expressivity = 0
-    # for i in range(len(avg_pred)):
-    #     final_expressivity += avg_pred[i]*exp_func.exps[i][feature_num]
-    # return solver.g_history, avg_pred, final_expressivity
 
     ### method 2: Returning best valid model
     print('num iterations: ', _-1)
@@ -234,23 +227,23 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
 # df_name = 'student'
 # run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
-df = pd.read_csv('data/compas/compas_decile.csv')
-target = 'decile_score'
-t_split = .5
-sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-df_name = 'compas_decile'
-run_system(df, target, sensitive_features, df_name, dummy, t_split)
+# df = pd.read_csv('data/compas/compas_decile.csv')
+# target = 'decile_score'
+# t_split = .5
+# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
+# df_name = 'compas_decile'
+# run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = BankDataset().convert_to_dataframe()[0]
 # target = 'y'
-# t_split = .2
+# t_split = .5
 # sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
 # df_name = 'bank'
 # run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = pd.read_csv('data/folktables/ACSIncome_MI_2018_new.csv')
 # target = 'PINCP'
-# t_split = .2
+# t_split = .5
 # sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
 #                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
 # df_name = 'folktables'

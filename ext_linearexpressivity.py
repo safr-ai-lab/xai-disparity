@@ -119,7 +119,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         size = np.sum((sigmoid(x @ params_temp)).cpu().detach().numpy())/x.shape[0]
         s_record.append(size)
 
-        p_record.append(final_value(x, y, params_temp, feature_num)[0])
+        p_record.append(final_value(x, y, params_temp.cpu().detach().numpy(), feature_num)[0])
         iters += 1
     params_max = sensitives * params_max
     max_error = curr_error * -1
