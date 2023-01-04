@@ -66,12 +66,12 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
         diag = torch.diag(one_d)
         x_t = torch.t(x)
         denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
-        difference_penalty = basis @ (denom @ (x_t @ diag @ y))
+        coefficient = basis @ (denom @ (x_t @ diag @ y))
 
         size = torch.sum(one_d)/x.shape[0]
         size_penalty = lam*(max(alpha[0]-size, 0) + max(size-alpha[1], 0))
 
-        return size_penalty + .1 * sign * difference_penalty
+        return size_penalty + .1 * sign * coefficient
 
     return loss_fn
 
@@ -127,6 +127,16 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     #print('final train size: ',torch.sum(sigmoid(x @ params_max))/x.shape[0])
     return max_error, assigns, params_max.cpu().detach().numpy(), s_record, p_record
 
+def is_valid(assigns, alpha):
+    """
+    return: 1 if valid, 0 if invalid
+    """
+    size = np.mean(assigns)
+    if size-alpha[0]>0 and alpha[1]-size>0:
+        valid = 1
+    else:
+        valid = 0
+    return valid
 
 def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
@@ -220,7 +230,9 @@ def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: st
 
             furthest_exp_min, _ = final_value(x_train, y_train, params_min, feature_num)
             furthest_exp_max, _ = final_value(x_train, y_train, params_max, feature_num)
-            if abs(furthest_exp_max - total_exp_train) > abs(furthest_exp_min - total_exp_train):
+            valid_min = is_valid(assigns_min, alpha)
+            valid_max = is_valid(assigns_max, alpha)
+            if valid_max * abs(furthest_exp_max - total_exp_train) > valid_min * abs(furthest_exp_min - total_exp_train):
                 assigns_train, params, s_record, p_record = assigns_max, params_max, s_record_max, p_record_max
                 furthest_exp_train = furthest_exp_max
                 direction = 'maximize'
