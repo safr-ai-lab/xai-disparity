@@ -112,7 +112,7 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas
     """
     train_df, test_df = train_test_split(dataset, test_size=t_split, random_state=seed)
     x_train, y_train = split_out_dataset(train_df, target_column)
-    x_test, y_test = split_out_dataset(test_df, target)
+    x_test, y_test = split_out_dataset(test_df, target_column)
     classifier = RandomForestClassifier(random_state=seed)
     classifier.fit(x_train, y_train)
     out_df = pd.DataFrame()
