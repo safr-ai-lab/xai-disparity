@@ -70,7 +70,7 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
 
         if solver.phi_s(assigns)+solver.phi_L(assigns) == 0:
             solver.v_t = 0
-        if _%500 == 0:
+        if _%800 == 0:
             print('Max iterations reached')
             solver.v_t = 0
         solver.update_thetas(assigns)
@@ -205,17 +205,27 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
 
     f_sensitive = list(df.columns.get_indexer(sensitive_features))
 
-    final_df = pd.DataFrame()
-    alpha_ranges = [[.01,.05],[.05,.1],[.1,.15],[.15,.2]]
-    for a in alpha_ranges:
-        print("Running", df_name, ", Alphas =", a)
-        start = time.time()
-        out = extremize_exps_dataset(dataset=df, exp_func=LimeExpFunc, target_column=target,
-                                     f_sensitive=f_sensitive, alphas=a, t_split=t_split)
-        final_df = pd.concat([final_df, out])
-        print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+    # final_df = pd.DataFrame()
+    # alpha_ranges = [[.01,.05],[.05,.1],[.1,.15],[.15,.2]]
+    # for a in alpha_ranges:
+    #     print("Running", df_name, ", Alphas =", a)
+    #     start = time.time()
+    #     out = extremize_exps_dataset(dataset=df, exp_func=LimeExpFunc, target_column=target,
+    #                                  f_sensitive=f_sensitive, alphas=a, t_split=t_split)
+    #     final_df = pd.concat([final_df, out])
+    #     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
+    # date = datetime.today().strftime('%m_%d')
+    # final_df.to_csv(f'output_constrained/{df_name}_output_{date}.csv')
+
+    a = [.01,.05]
+    print("Running", df_name, ", Alphas =", a)
+    start = time.time()
+    final_df = extremize_exps_dataset(dataset=df, exp_func=LimeExpFunc, target_column=target,
+                                      f_sensitive=f_sensitive, alphas=a, t_split=t_split)
+    print("Runtime:", '%.2f' % ((time.time() - start) / 3600), "Hours")
     date = datetime.today().strftime('%m_%d')
-    final_df.to_csv(f'output_constrained/{df_name}_output_{date}.csv')
+    final_df.to_csv(f'output_constrained/{df_name}_output_{date}_alpha{a}.csv')
+
     return 1
 
 
@@ -223,7 +233,6 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
 # target = 'G3'
 # t_split = .5
 # sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
-# # sensitive_features = list(df.columns).remove('G3')
 # df_name = 'student'
 # run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
