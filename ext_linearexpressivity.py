@@ -11,13 +11,11 @@ import argparse
 
 
 parser = argparse.ArgumentParser(description='Locally separable run')
-parser.add_argument('lam', type=float)
-parser.add_argument('niters', type=int)
+parser.add_argument('flatval', type=float)
 parser.add_argument('--dummy', action='store_true')
 parser.add_argument('--cuda', action='store_true')
 args = parser.parse_args()
-lam = args.lam
-niters = args.niters
+flatval = args.flatval
 dummy = args.dummy
 useCUDA = args.cuda
 
@@ -28,8 +26,8 @@ else:
     torch.device('cuda:0')
 
 
-def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, feature_num: int,
-                      sensitives: torch.Tensor, alpha: list, minimize: bool):
+def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, feature_num: int, sensitives: torch.Tensor,
+                      alpha: list, minimize: bool):
     """
     Factory for the loss function that pytorch runs will be optimizing in WLS
     :param x_0: the data tensor with intercept column
@@ -45,7 +43,7 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
 
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.00001 for _ in range(x.shape[1])]
+    flat_list = [flatval for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -69,15 +67,14 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
         coefficient = basis @ (denom @ (x_t @ diag @ y))
 
         size = torch.sum(one_d)/x.shape[0]
-        size_penalty = lam*(max(alpha[0]-size, 0) + max(size-alpha[1], 0))
+        size_penalty = 100000*(max(alpha[0]-size, 0) + max(size-alpha[1], 0))
 
         return size_penalty + .1 * sign * coefficient
 
     return loss_fn
 
 
-def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial_val: float,
-                     f_sensitive: list, alpha: list, minimize: bool):
+def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, f_sensitive: list, alpha: list, minimize: bool):
     """
     Given an x, y, feature num, and the expressivity over the whole dataset,
     returns the differential expressivity and maximal subset for that feature
@@ -89,7 +86,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     :param alpha: target subgroup size
     :return: the differential expressivity and maximal subset weights.
     """
-    #niters = niter
+    niters = 1000
     # Set seed to const value for reproducibility
     torch.manual_seed(seed)
     s_list = [0. for _ in range(x.shape[1])]
@@ -107,7 +104,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     curr_error = 10000
     s_record = []
     p_record = []
-    loss_max = loss_fn_generator(x, y, initial_val, feature_num, sensitives, alpha, minimize)
+    loss_max = loss_fn_generator(x, y, feature_num, sensitives, alpha, minimize)
     while iters < niters:
         optim.zero_grad()
         loss_res = loss_max(params_max)
@@ -148,7 +145,7 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.00001 for _ in range(x.shape[1])]
+    flat_list = [flatval for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -174,7 +171,7 @@ def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, featur
     x = remove_intercept_column(x_0)
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.00001 for _ in range(x.shape[1])]
+    flat_list = [flatval for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -222,11 +219,9 @@ def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: st
         total_exp_train = initial_value(x_train_ni, y_train, feature_num)
         try:
             _, assigns_min, params_min, s_record_min, p_record_min = train_and_return(x_train, y_train, feature_num,
-                                                                                      total_exp_train, f_sensitive,
-                                                                                      alpha, minimize=True)
+                                                                                      f_sensitive, alpha, minimize=True)
             _, assigns_max, params_max, s_record_max, p_record_max = train_and_return(x_train, y_train, feature_num,
-                                                                                      total_exp_train, f_sensitive,
-                                                                                      alpha, minimize=False)
+                                                                                      f_sensitive, alpha, minimize=False)
 
             furthest_exp_min, _ = final_value(x_train, y_train, params_min, feature_num)
             furthest_exp_max, _ = final_value(x_train, y_train, params_max, feature_num)
@@ -314,7 +309,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
         final_df = pd.concat([final_df, out])
 
     date = datetime.today().strftime('%m_%d')
-    fname = f'output/nonsep/{df_name}_output_{date}_lam{int(lam)}.csv'
+    fname = f'output/nonsep/{df_name}_output_{date}.csv'
     final_df.to_csv(fname)
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
