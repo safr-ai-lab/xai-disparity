@@ -1,4 +1,5 @@
 from lime_exp_func import LimeExpFunc
+from shap_exp_func import ShapExpFunc
 from constrained_solver import ConstrainedSolver
 from learner import Learner
 from sklearn import linear_model
@@ -11,13 +12,22 @@ import time
 import argparse
 from datetime import datetime
 import json
-import pdb
+import sys
 
 
 parser = argparse.ArgumentParser(description='Locally separable run')
+parser.add_argument('exp_method', type=str)
 parser.add_argument('--dummy', action='store_true')
 args = parser.parse_args()
+exp_method = args.exp_method
 dummy = args.dummy
+
+if exp_method == 'lime':
+    expFunc = LimeExpFunc
+elif exp_method == 'shap':
+    expFunc = ShapExpFunc
+else:
+    sys.exit('Exp method not recognized')
 
 
 def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
@@ -52,21 +62,6 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
         expressivity = exp_func.get_total_exp(assigns, feature_num)
         solver.pred_history.append(np.array(assigns))
         solver.exp_history.append(expressivity)
-
-        # # Q^ <- avg(h_t), L_ceiling <- L(Q^, best_lam(Q^))
-        # avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
-        # best_lam = solver.best_lambda(avg_pred)
-        # L_ceiling = solver.lagrangian(avg_pred, best_lam, feature_num, minimize)
-        #
-        # # lam^ <- avg(lambda), L_floor <- L(best_h(lam^), lam^)
-        # avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
-        # best_g = solver.best_g(learner, feature_num, avg_lam, minimize)
-        # best_g_assigns, best_g_costs = best_g.predict(x_sensitive)
-        # best_g_exps = exp_func.get_total_exp(best_g_assigns, feature_num)
-        # L_floor = solver.lagrangian(best_g_assigns, avg_lam, feature_num, minimize)
-        #
-        # L = solver.lagrangian(avg_pred, avg_lam, feature_num, minimize)
-        # solver.v_t = max(abs(L-L_floor), abs(L_ceiling-L))
 
         if solver.phi_s(assigns)+solver.phi_L(assigns) == 0:
             solver.v_t = 0
@@ -126,11 +121,11 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas
     #exp_func_test.populate_exps()
 
     # Temporary exp populating
-    with open(f'data/exps/{df_name}_train_seed0', 'r') as f:
+    with open(f'data/exps/{df_name}_train_{exp_method}_seed0', 'r') as f:
         train_temp = list(map(json.loads, f))[0]
     for e_list in train_temp:
         exp_func_train.exps.append({int(k):v for k,v in e_list.items()})
-    with open(f'data/exps/{df_name}_test_seed0', 'r') as f:
+    with open(f'data/exps/{df_name}_test_{exp_method}_seed0', 'r') as f:
         test_temp = list(map(json.loads, f))[0]
     for e_list in test_temp:
         exp_func_test.exps.append({int(k):v for k,v in e_list.items()})
@@ -153,12 +148,10 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas
             furthest_exp_train = max_exp
             assigns_train = max_assigns
             best_model = max_model
-            direction = 'maximize'
         else:
             furthest_exp_train = min_exp
             assigns_train = min_assigns
             best_model = min_model
-            direction = 'minimize'
         subgroup_size_train = np.mean(assigns_train)
 
         # compute test values
@@ -175,21 +168,26 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas
         params = best_model.b1.coef_
         params_with_labels = {dataset.columns[i]: float(param) for (i, param) in zip(f_sensitive, params)}
         print(params_with_labels)
-
-        out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
-                                                                'Alpha': alphas,
-                                                                'F(D)': total_exp_test,
-                                                                'max(F(S))': furthest_exp_test,
-                                                                'Difference': abs(furthest_exp_test - total_exp_test),
-                                                                'avg(F(D))': total_exp_test/len(assigns_test),
-                                                                'avg(F(S))': furthest_exp_test/(sum(assigns_test)+.0001),
-                                                                'Subgroup Coefficients': params_with_labels,
-                                                                'Subgroup Size': subgroup_size_test,
-                                                                'Direction': direction,
-                                                                'F(D)_train': total_exp_train,
-                                                                'max(F(S))_train': furthest_exp_train,
-                                                                'Difference_train': abs(furthest_exp_train-total_exp_train),
-                                                                'Subgroup Size_train': subgroup_size_train}])])
+        out_df = pd.concat([out_df,
+                            pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
+                                                        'Alpha': alphas,
+                                                        'F(D)': total_exp_test,
+                                                        'max(F(S))': furthest_exp_test,
+                                                        'Difference': abs(furthest_exp_test - total_exp_test),
+                                                        'Percent Change': 100*abs(furthest_exp_test - total_exp_test)/
+                                                                          (abs(total_exp_test)+.000001),
+                                                        'avg(F(D))': total_exp_test/len(assigns_test),
+                                                        'avg(F(S))': furthest_exp_test/(sum(assigns_test)+.000001),
+                                                        'avg diff': abs(total_exp_test/len(assigns_test) -
+                                                                        furthest_exp_test/(sum(assigns_test)+.000001)),
+                                                        'Subgroup Coefficients': params_with_labels,
+                                                        'Subgroup Size': subgroup_size_test,
+                                                        'F(D)_train': total_exp_train,
+                                                        'max(F(S))_train': furthest_exp_train,
+                                                        'Difference_train': abs(furthest_exp_train-total_exp_train),
+                                                        'Percent Change_train': 100*abs(furthest_exp_train-total_exp_train)/
+                                                                                (abs(total_exp_train) + .000001),
+                                                        'Subgroup Size_train': subgroup_size_train}])])
 
     return out_df
 
@@ -220,21 +218,21 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
     a = [.01,.05]
     print("Running", df_name, ", Alphas =", a)
     start = time.time()
-    final_df = extremize_exps_dataset(dataset=df, exp_func=LimeExpFunc, target_column=target,
+    final_df = extremize_exps_dataset(dataset=df, exp_func=expFunc, target_column=target,
                                       f_sensitive=f_sensitive, alphas=a, t_split=t_split)
     print("Runtime:", '%.2f' % ((time.time() - start) / 3600), "Hours")
     date = datetime.today().strftime('%m_%d')
-    final_df.to_csv(f'output_constrained/{df_name}_output_{date}_alpha{a}.csv')
+    final_df.to_csv(f'output_constrained/{df_name}_{exp_method}_output_{date}_alpha{a}.csv')
 
     return 1
 
 
-# df = pd.read_csv('data/student/student_cleaned.csv')
-# target = 'G3'
-# t_split = .5
-# sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
-# df_name = 'student'
-# run_system(df, target, sensitive_features, df_name, dummy, t_split)
+df = pd.read_csv('data/student/student_cleaned.csv')
+target = 'G3'
+t_split = .5
+sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
+df_name = 'student'
+run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = pd.read_csv('data/compas/compas_decile.csv')
 # target = 'decile_score'
