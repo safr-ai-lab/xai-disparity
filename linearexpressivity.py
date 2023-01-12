@@ -11,13 +11,11 @@ import argparse
 
 
 parser = argparse.ArgumentParser(description='Locally separable run')
-parser.add_argument('lam', type=float)
-parser.add_argument('niters', type=int)
+parser.add_argument('flatval', type=float)
 parser.add_argument('--dummy', action='store_true')
 parser.add_argument('--cuda', action='store_true')
 args = parser.parse_args()
-lam = args.lam
-niters = args.niters
+flatval = args.flatval
 dummy = args.dummy
 useCUDA = args.cuda
 
@@ -28,8 +26,8 @@ else:
     torch.device('cuda:0')
 
 
-def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, feature_num: int,
-                      sensitives: torch.Tensor, alpha: list):
+def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, feature_num: int, sensitives: torch.Tensor,
+                      alpha: list, minimize: bool):
     """
     Factory for the loss function that pytorch runs will be optimizing in WLS
     :param x_0: the data tensor with intercept column
@@ -41,12 +39,11 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
     :param minimize: Boolean -- are we minimizing or maximizing
     :return: a loss function for our particular WLS problem.
     """
-    # TODO: investigate minimize/maximize boolean
     x = remove_intercept_column(x_0)
 
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.00001 for _ in range(x.shape[1])]
+    flat_list = [flatval for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -55,6 +52,11 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
         basis = torch.tensor(basis_list, requires_grad=True)
         flat = torch.tensor(flat_list, requires_grad=True)
 
+    if minimize:
+        sign = 1
+    else:
+        sign = -1
+
     # Look into derivation of gradient by hand and implementing it here instead.
     def loss_fn(params):
         # only train using sensitive features
@@ -62,19 +64,17 @@ def loss_fn_generator(x_0: torch.Tensor, y: torch.Tensor, initial_val: float, fe
         diag = torch.diag(one_d)
         x_t = torch.t(x)
         denom = torch.inverse((x_t @ diag @ x) + torch.diag(flat))
-        difference_penalty = torch.abs(basis @ (denom @ (x_t @ diag @ y)) - initial_val)
+        coefficient = basis @ (denom @ (x_t @ diag @ y))
 
-        #size_penalty = lam*torch.abs((torch.sum(one_d)/x.shape[0])-alpha)
         size = torch.sum(one_d)/x.shape[0]
-        size_penalty = lam*(max(alpha[0]-size, 0) + max(size-alpha[1], 0))
-        # we want to maximize difference penalty but minimize size penalty
-        return size_penalty - .1*difference_penalty
+        size_penalty = 100000*(max(alpha[0]-size, 0) + max(size-alpha[1], 0))
+
+        return size_penalty + .1 * sign * coefficient
 
     return loss_fn
 
 
-def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial_val: float,
-                     f_sensitive: list, alpha: list):
+def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, f_sensitive: list, alpha: list, minimize: bool):
     """
     Given an x, y, feature num, and the expressivity over the whole dataset,
     returns the differential expressivity and maximal subset for that feature
@@ -86,7 +86,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     :param alpha: target subgroup size
     :return: the differential expressivity and maximal subset weights.
     """
-    #niters = niter
+    niters = 1000
     # Set seed to const value for reproducibility
     torch.manual_seed(seed)
     s_list = [0. for _ in range(x.shape[1])]
@@ -104,7 +104,7 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
     curr_error = 10000
     s_record = []
     p_record = []
-    loss_max = loss_fn_generator(x, y, initial_val, feature_num, sensitives, alpha)
+    loss_max = loss_fn_generator(x, y, feature_num, sensitives, alpha, minimize)
     while iters < niters:
         optim.zero_grad()
         loss_res = loss_max(params_max)
@@ -115,16 +115,25 @@ def train_and_return(x: torch.Tensor, y: torch.Tensor, feature_num: int, initial
         params_temp = sensitives * params_max
         size = np.sum((sigmoid(x @ params_temp)).cpu().detach().numpy())/x.shape[0]
         s_record.append(size)
-        size_penalty = lam * (max(alpha[0] - size, 0) + max(size - alpha[1], 0))
-        p_record.append(loss_res.item()-size_penalty)
+
+        p_record.append(final_value(x, y, params_temp.cpu().detach().numpy(), feature_num)[0])
         iters += 1
     params_max = sensitives * params_max
     max_error = curr_error * -1
     assigns = (sigmoid(x @ params_max)).cpu().detach().numpy()
-    print('final train size: ',torch.sum(sigmoid(x @ params_max))/x.shape[0])
-    #print(max_error, initial_val, assigns[assigns >= 0.02])
+    #print('final train size: ',torch.sum(sigmoid(x @ params_max))/x.shape[0])
     return max_error, assigns, params_max.cpu().detach().numpy(), s_record, p_record
 
+def is_valid(assigns, alpha):
+    """
+    return: 1 if valid, 0 if invalid
+    """
+    size = np.mean(assigns)
+    if size-alpha[0]>0 and alpha[1]-size>0:
+        valid = 1
+    else:
+        valid = 0
+    return valid
 
 def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
@@ -136,7 +145,7 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
     """
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.00001 for _ in range(x.shape[1])]
+    flat_list = [flatval for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -147,8 +156,7 @@ def initial_value(x: torch.Tensor, y: torch.Tensor, feature_num: int) -> float:
         basis = torch.tensor(basis_list, requires_grad=True)
         flat = torch.tensor(flat_list, requires_grad=True)
         x_t = torch.t(x)
-        #denom = torch.inverse((x_t @ x) + torch.diag(flat))
-        denom = torch.inverse((x_t @ x))
+        denom = torch.inverse((x_t @ x) + torch.diag(flat))
     return (basis @ (denom @ (x_t @ y))).item()
 
 def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, feature_num: int):
@@ -163,7 +171,7 @@ def final_value(x_0: torch.Tensor, y: torch.Tensor, params: torch.Tensor, featur
     x = remove_intercept_column(x_0)
     basis_list = [[0. for _ in range(x.shape[1])]]
     basis_list[0][feature_num] = 1.
-    flat_list = [0.00001 for _ in range(x.shape[1])]
+    flat_list = [flatval for _ in range(x.shape[1])]
 
     if useCUDA:
         basis = torch.tensor(basis_list, requires_grad=True).cuda()
@@ -210,30 +218,45 @@ def find_extreme_subgroups(dataset: pd.DataFrame, alpha: list, target_column: st
         x_train_ni = remove_intercept_column(x_train)
         total_exp_train = initial_value(x_train_ni, y_train, feature_num)
         try:
-            _, assigns_train, params, s_record, p_record = train_and_return(x_train, y_train, feature_num, total_exp_train, f_sensitive, alpha)
-            furthest_exp_train, _ = final_value(x_train, y_train, params, feature_num)
-            subgroup_size_train = sum(assigns_train)/len(assigns_train)
-            if not (np.isnan(furthest_exp_train)):
-                x_test_ni = remove_intercept_column(x_test)
-                total_exp = initial_value(x_test_ni, y_test, feature_num)
-                furthest_exp, assigns = final_value(x_test, y_test, params, feature_num)
-                subgroup_size = sum(assigns)/len(assigns)
-                errors_and_weights.append((furthest_exp, feature_num))
-                print(furthest_exp, feature_num)
-                params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
-                out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
-                                                                        'Alpha': alpha,
-                                                                        'F(D)': total_exp,
-                                                                        'max(F(S))': furthest_exp,
-                                                                        'Difference': abs(furthest_exp - total_exp),
-                                                                        'Subgroup Coefficients': params_with_labels,
-                                                                        'Subgroup Size': subgroup_size,
-                                                                        'F(D)_train': total_exp_train,
-                                                                        'max(F(S))_train': furthest_exp_train,
-                                                                        'Difference_train': abs(furthest_exp_train - total_exp_train),
-                                                                        'Subgroup Size_train': subgroup_size_train,
-                                                                        'Size record': s_record,
-                                                                        'WLS Penalties': p_record}])])
+            _, assigns_min, params_min, s_record_min, p_record_min = train_and_return(x_train, y_train, feature_num,
+                                                                                      f_sensitive, alpha, minimize=True)
+            _, assigns_max, params_max, s_record_max, p_record_max = train_and_return(x_train, y_train, feature_num,
+                                                                                      f_sensitive, alpha, minimize=False)
+
+            furthest_exp_min, _ = final_value(x_train, y_train, params_min, feature_num)
+            furthest_exp_max, _ = final_value(x_train, y_train, params_max, feature_num)
+            valid_min = is_valid(assigns_min, alpha)
+            valid_max = is_valid(assigns_max, alpha)
+            if valid_max * abs(furthest_exp_max - total_exp_train) > valid_min * abs(furthest_exp_min - total_exp_train):
+                assigns_train, params, s_record, p_record = assigns_max, params_max, s_record_max, p_record_max
+                furthest_exp_train = furthest_exp_max
+            else:
+                assigns_train, params, s_record, p_record = assigns_min, params_min, s_record_min, p_record_min
+                furthest_exp_train = furthest_exp_min
+            subgroup_size_train = np.mean(assigns_train)
+
+            x_test_ni = remove_intercept_column(x_test)
+            total_exp = initial_value(x_test_ni, y_test, feature_num)
+            furthest_exp, assigns = final_value(x_test, y_test, params, feature_num)
+            subgroup_size = np.mean(assigns)
+            errors_and_weights.append((furthest_exp, feature_num))
+            print(furthest_exp, feature_num)
+            params_with_labels = {dataset.columns[i]: float(param) for (i, param) in enumerate(params)}
+            out_df = pd.concat([out_df, pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
+                                                                    'Alpha': alpha,
+                                                                    'F(D)': total_exp,
+                                                                    'max(F(S))': furthest_exp,
+                                                                    'Difference': abs(furthest_exp - total_exp),
+                                                                    'Percent Change': 100*abs(furthest_exp - total_exp)/total_exp,
+                                                                    'Subgroup Coefficients': params_with_labels,
+                                                                    'Subgroup Size': subgroup_size,
+                                                                    'F(D)_train': total_exp_train,
+                                                                    'max(F(S))_train': furthest_exp_train,
+                                                                    'Difference_train': abs(furthest_exp_train - total_exp_train),
+                                                                    'Percent Change_train': 100*abs(furthest_exp_train - total_exp_train)/total_exp_train,
+                                                                    'Subgroup Size_train': subgroup_size_train,
+                                                                    'Size record': s_record,
+                                                                    'WLS Penalties': p_record}])])
         except RuntimeError as e:
             print(e)
             continue
@@ -286,7 +309,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
         final_df = pd.concat([final_df, out])
 
     date = datetime.today().strftime('%m_%d')
-    fname = f'output/nonsep/{df_name}_output_{date}_lam{int(lam)}.csv'
+    fname = f'output/nonsep/{df_name}_output_{date}.csv'
     final_df.to_csv(fname)
     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     return 1
