@@ -65,7 +65,7 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
 
         if solver.phi_s(assigns)+solver.phi_L(assigns) == 0:
             solver.v_t = 0
-        if _%800 == 0:
+        if _%2000 == 0:
             print('Max iterations reached')
             solver.v_t = 0
         solver.update_thetas(assigns)
@@ -148,10 +148,12 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas
             furthest_exp_train = max_exp
             assigns_train = max_assigns
             best_model = max_model
+            direction = 'maximize'
         else:
             furthest_exp_train = min_exp
             assigns_train = min_assigns
             best_model = min_model
+            direction = 'minimize'
         subgroup_size_train = np.mean(assigns_train)
 
         # compute test values
@@ -167,6 +169,7 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas
         # # from mix models, pick model with largest exp diff that is valid
         params = best_model.b1.coef_
         params_with_labels = {dataset.columns[i]: float(param) for (i, param) in zip(f_sensitive, params)}
+        params_with_labels['Intercept'] = best_model.b1.intercept_
         print(params_with_labels)
         out_df = pd.concat([out_df,
                             pd.DataFrame.from_records([{'Feature': dataset.columns[feature_num],
@@ -182,6 +185,7 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas
                                                                         furthest_exp_test/(sum(assigns_test)+.000001)),
                                                         'Subgroup Coefficients': params_with_labels,
                                                         'Subgroup Size': subgroup_size_test,
+                                                        'Direction': direction,
                                                         'F(D)_train': total_exp_train,
                                                         'max(F(S))_train': furthest_exp_train,
                                                         'Difference_train': abs(furthest_exp_train-total_exp_train),
@@ -233,6 +237,13 @@ t_split = .5
 sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
 df_name = 'student'
 run_system(df, target, sensitive_features, df_name, dummy, t_split)
+
+# df = pd.read_csv('data/compas/compas_recid.csv')
+# target = 'two_year_recid'
+# t_split = .5
+# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
+# df_name = 'compas_recid'
+# run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = pd.read_csv('data/compas/compas_decile.csv')
 # target = 'decile_score'

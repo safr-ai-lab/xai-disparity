@@ -15,8 +15,6 @@ def clean_df(df, split_adjust=1):
     df['max(F(S))'] = df['max(F(S))'].apply(lambda x: x*split_adjust)
     df['Subgroup Coefficients'] = df['Subgroup Coefficients'].apply(lambda x: json.loads(x.replace("\'","\"")))
     df['Subgroup Coefficients'] = df['Subgroup Coefficients'].apply(lambda x: {k: v for k, v in sorted(x.items(), key=lambda item: abs(item[1]), reverse=True)})
-    df['Percent Change'] = 100 * abs(df['max(F(S))'] - df['F(D)']) / (abs(df['F(D)']) + .0001)
-    df['Percent Change train'] = 100 * abs(df['max(F(S))_train'] - df['F(D)_train']) / (abs(df['F(D)_train']) + .0001)
     return df
 
 final_df = pd.DataFrame()
