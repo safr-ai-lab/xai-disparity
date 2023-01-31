@@ -1,6 +1,7 @@
 from lime_exp_func import LimeExpFunc
 from shap_exp_func import ShapExpFunc
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from aif360.datasets import BankDataset
 import argparse
@@ -29,17 +30,17 @@ def split_out_dataset(dataset, target_column):
     #sensitive_ds = dataset[f_sensitive].to_numpy()
     return x, y
 
-df = pd.read_csv('data/student/student_cleaned.csv')
-target = 'G3'
-t_split = .5
-sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
-df_name = 'student'
-
-# df = pd.read_csv('data/compas/compas_cleaned.csv')
-# target = 'two_year_recid'
+# df = pd.read_csv('data/student/student_cleaned.csv')
+# target = 'G3'
 # t_split = .5
-# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-# df_name = 'compas_recid'
+# sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
+# df_name = 'student'
+
+df = pd.read_csv('data/compas/compas_recid.csv')
+target = 'two_year_recid'
+t_split = .5
+sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
+df_name = 'compas_recid'
 
 # df = pd.read_csv('data/compas/compas_cleaned_decile.csv')
 # target = 'decile_score'
@@ -73,7 +74,8 @@ train_df, test_df = train_test_split(df, test_size=t_split, random_state=seed)
 x_train, y_train = split_out_dataset(train_df, target)
 x_test, y_test = split_out_dataset(test_df, target)
 print('training classifier')
-classifier = RandomForestClassifier(random_state=seed)
+#classifier = RandomForestClassifier(random_state=seed)
+classifier = LogisticRegression(random_state=seed,max_iter=1000)
 classifier.fit(x_train, y_train)
 
 start = time.time()
@@ -82,7 +84,7 @@ print("Populating train expressivity values")
 exp_func_train.populate_exps()
 print("runtime train: ", time.time()-start)
 
-with open(f'data/exps/{df_name}_train_{exp_method}_seed{seed}', 'w') as fout:
+with open(f'data/exps/{df_name}_train_{exp_method}LR_seed{seed}', 'w') as fout:
     json.dump(exp_func_train.exps, fout)
 
 start = time.time()
@@ -91,6 +93,6 @@ print("Populating test expressivity values")
 exp_func_test.populate_exps()
 print("runtime test: ", time.time()-start)
 
-with open(f'data/exps/{df_name}_test_{exp_method}_seed{seed}', 'w') as fout:
+with open(f'data/exps/{df_name}_test_{exp_method}LR_seed{seed}_lr', 'w') as fout:
     json.dump(exp_func_test.exps, fout)
 
