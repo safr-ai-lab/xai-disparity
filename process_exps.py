@@ -1,7 +1,8 @@
 from lime_exp_func import LimeExpFunc
 from shap_exp_func import ShapExpFunc
+from grad_exp_func import GradExpFunc
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
+import sklearn
 from sklearn.model_selection import train_test_split
 from aif360.datasets import BankDataset
 import argparse
@@ -9,6 +10,8 @@ import pandas as pd
 import json
 import time
 import sys
+import torch
+import torch.nn as nn
 
 parser = argparse.ArgumentParser(description='Locally separable run')
 parser.add_argument('exp_method', type=str)
@@ -21,8 +24,18 @@ if exp_method == 'lime':
     expFunc = LimeExpFunc
 elif exp_method == 'shap':
     expFunc = ShapExpFunc
+elif exp_method == 'grad':
+    expFunc = GradExpFunc
 else:
     sys.exit('Exp method not recognized')
+
+class LogisticRegression(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(LogisticRegression, self).__init__()
+        self.linear = torch.nn.Linear(input_dim, output_dim)
+    def forward(self, x):
+        outputs = torch.sigmoid(self.linear(x))
+        return outputs
 
 def split_out_dataset(dataset, target_column):
     x = dataset.drop(target_column, axis=1).to_numpy()
@@ -67,6 +80,7 @@ df_name = 'compas_recid'
 #                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
 # df_name = 'folktables'
 
+
 print('starting', df_name)
 new_cols = [col for col in df.columns if col != target] + [target]
 df = df[new_cols]
@@ -75,8 +89,21 @@ x_train, y_train = split_out_dataset(train_df, target)
 x_test, y_test = split_out_dataset(test_df, target)
 print('training classifier')
 #classifier = RandomForestClassifier(random_state=seed)
-classifier = LogisticRegression(random_state=seed,max_iter=1000)
+classifier = sklearn.linear_model.LogisticRegression(random_state=seed,max_iter=1000)
 classifier.fit(x_train, y_train)
+
+# else:
+#     epochs = 200000
+#     input_dim = x_train.shape[1] # Two inputs x1 and x2
+#     output_dim = max(y_train)+1
+#     learning_rate = 0.01
+#
+#     model = LogisticRegression(input_dim,output_dim)
+#     criterion = torch.nn.CrossEntropyLoss()
+#     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+#
+#     X_train, X_test = torch.Tensor(x_train),torch.Tensor(x_test)
+#     Y_train, Y_test = torch.Tensor(y_train),torch.Tensor(y_test)
 
 start = time.time()
 exp_func_train = expFunc(classifier, x_train, seed)
