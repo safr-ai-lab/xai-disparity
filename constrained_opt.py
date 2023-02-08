@@ -124,11 +124,11 @@ def extremize_exps_dataset(dataset, exp_func, target_column, f_sensitive, alphas
     #exp_func_test.populate_exps()
 
     # Temporary exp populating
-    with open(f'data/exps/{df_name}_train_{exp_method}LR_seed0', 'r') as f:
+    with open(f'data/exps/{df_name}_train_{exp_method}_seed0', 'r') as f:
         train_temp = list(map(json.loads, f))[0]
     for e_list in train_temp:
         exp_func_train.exps.append({int(k):v for k,v in e_list.items()})
-    with open(f'data/exps/{df_name}_test_{exp_method}LR_seed0', 'r') as f:
+    with open(f'data/exps/{df_name}_test_{exp_method}_seed0', 'r') as f:
         test_temp = list(map(json.loads, f))[0]
     for e_list in test_temp:
         exp_func_test.exps.append({int(k):v for k,v in e_list.items()})
@@ -220,7 +220,7 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
     #     final_df = pd.concat([final_df, out])
     #     print("Runtime:", '%.2f'%((time.time()-start)/3600), "Hours")
     # date = datetime.today().strftime('%m_%d')
-    # final_df.to_csv(f'output_constrained/{df_name}_output_{date}.csv')
+    # final_df.to_csv(f'output/{df_name}_output_{date}.csv')
 
     a = [.01,.05]
     print("Running", df_name, ", Alphas =", a)
@@ -229,24 +229,24 @@ def run_system(df, target, sensitive_features, df_name, dummy=False, t_split=.5)
                                       f_sensitive=f_sensitive, alphas=a, t_split=t_split)
     print("Runtime:", '%.2f' % ((time.time() - start) / 3600), "Hours")
     date = datetime.today().strftime('%m_%d')
-    final_df.to_csv(f'output_constrained/{df_name}_{exp_method}LR_output_{date}_alpha{a}.csv')
+    final_df.to_csv(f'output/{df_name}_{exp_method}_output_{date}_alpha{a}.csv')
 
     return 1
 
 
-# df = pd.read_csv('data/student/student_cleaned.csv')
-# target = 'G3'
-# t_split = .5
-# sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
-# df_name = 'student'
-# run_system(df, target, sensitive_features, df_name, dummy, t_split)
-
-df = pd.read_csv('data/compas/compas_recid.csv')
-target = 'two_year_recid'
+df = pd.read_csv('data/student/student_cleaned.csv')
+target = 'G3'
 t_split = .5
-sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-df_name = 'compas_recid'
+sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
+df_name = 'student'
 run_system(df, target, sensitive_features, df_name, dummy, t_split)
+
+# df = pd.read_csv('data/compas/compas_recid.csv')
+# target = 'two_year_recid'
+# t_split = .5
+# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
+# df_name = 'compas_recid'
+# run_system(df, target, sensitive_features, df_name, dummy, t_split)
 
 # df = pd.read_csv('data/compas/compas_decile.csv')
 # target = 'decile_score'
