@@ -109,6 +109,33 @@ class ConstrainedSolver:
         constraint_terms = self.phi_L(assigns) * lambda_L + self.phi_U(assigns) * lambda_U
         return L + constraint_terms
 
+    def update_vt(self, learner, x_s, feature_num, minimize):
+        # compute avg(Q), Best_lam, and L ceiling
+        avg_pred = [np.mean(k) for k in zip(*self.pred_history)]
+        self.avg_pred_size.append(np.mean(avg_pred))
+        best_lam = self.best_lambda(avg_pred)
+        L_ceiling = self.lagrangian(avg_pred, best_lam, feature_num, minimize)
+        self.L_ceilings.append(L_ceiling)
+
+        # compute avg(lam),
+        avg_lam = [np.mean(k) for k in zip(*self.lambda_history)]
+        self.avg_lambda.append(avg_lam)
+        costs0 = [0 for _ in range(len(x_s))]
+        if minimize:
+            costs1 = [self.expFunc.exps[i][feature_num] - avg_lam[0] + avg_lam[1] for i in range(len(x_s))]
+        else:
+            costs1 = [-self.expFunc.exps[i][feature_num] - avg_lam[0] + avg_lam[1] for i in range(len(x_s))]
+        best_h = learner.best_response(costs0, costs1)
+        best_h_preds = best_h.predict(x_s)[0]
+        self.besth_avg_lambda.append(np.mean(best_h_preds))
+        L_floor = self.lagrangian(best_h_preds, avg_lam, feature_num, minimize)
+        self.L_floors.append(L_floor)
+
+        L = self.lagrangian(avg_pred, avg_lam, feature_num, minimize)
+        self.Ls.append(L)
+        self.v_t = max(abs(L - L_floor), abs(L_ceiling - L))
+        self.vt_history.append(self.v_t)
+
     def get_valid_model_i(self):
         valids = []
         for i in range(len(self.pred_history)):

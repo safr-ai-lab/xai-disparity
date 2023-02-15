@@ -46,10 +46,6 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
     _ = 1
     start2 = time.time()
     while solver.v_t > v:
-        if _%500==0:
-            print("ITERATION NUMBER ", _, "time:", time.time()-start2)
-            print(np.mean(assigns))
-            #print(solver.v_t, ' | ',v)
         solver.update_lambdas()
 
         # CSC solver, returns regoracle fit using costs0/costs1
@@ -68,32 +64,16 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
         solver.size_history.append(np.mean(assigns))
         solver.exp_history.append(expressivity)
 
-        avg_pred = [np.mean(k) for k in zip(*solver.pred_history)]
-        solver.avg_pred_size.append(np.mean(avg_pred))
-        best_lam = solver.best_lambda(avg_pred)
-        L_ceiling = solver.lagrangian(avg_pred, best_lam, feature_num, minimize)
-        solver.L_ceilings.append(L_ceiling)
+        if _%10 == 0:
+            solver.update_vt(learner, x_sensitive, feature_num, minimize)
 
-        avg_lam = [np.mean(k) for k in zip(*solver.lambda_history)]
-        solver.avg_lambda.append(avg_lam)
-        if minimize:
-            costs1 = [exp_func.exps[i][feature_num]-avg_lam[0]+avg_lam[1] for i in range(len(x))]
-        else:
-            costs1 = [-exp_func.exps[i][feature_num]-avg_lam[0]+avg_lam[1] for i in range(len(x))]
-        best_h = learner.best_response(costs0, costs1)
-        best_h_preds = best_h.predict(x_sensitive)[0]
-        solver.besth_avg_lambda.append(np.mean(best_h_preds))
-        L_floor = solver.lagrangian(best_h_preds, avg_lam, feature_num, minimize)
-        solver.L_floors.append(L_floor)
-
-        L = solver.lagrangian(avg_pred, avg_lam, feature_num, minimize)
-        solver.Ls.append(L)
-        solver.v_t = max(abs(L-L_floor), abs(L_ceiling-L))
-        solver.vt_history.append(solver.v_t)
+        if _%500==0:
+            print("ITERATION NUMBER ", _, "time:", time.time()-start2)
+            print(np.mean(assigns))
 
         # if (solver.phi_L(assigns) <= 0) and (solver.phi_U(assigns) <= 0):
         #     solver.v_t = 0
-        if _%3000 == 0:
+        if _%1000 == 0:
             print('Max iterations reached')
             solver.v_t = 0
         solver.update_thetas(assigns)
