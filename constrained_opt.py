@@ -34,9 +34,9 @@ else:
 
 
 def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
-    exp_order = np.mean([abs(exp_func.exps[i][feature_num]) for i in range(len(x))])
+    exp_order = np.mean([abs(exp_func.exps[i][feature_num]) for i in range(len(x))])+.001
     size_reg = len(x)*np.mean(alphas)
-    solver = ConstrainedSolver(exp_func, alpha_L=alphas[0], alpha_U=alphas[1], B=100*exp_order*size_reg, nu=.0002)
+    solver = ConstrainedSolver(exp_func, alpha_L=alphas[0], alpha_U=alphas[1], B=10000*exp_order, nu=.00001)
     v = .05*exp_order*size_reg
     print('exp order:',exp_order, v)
 
@@ -74,7 +74,7 @@ def argmin_g(x, y, feature_num, f_sensitive, exp_func, minimize, alphas):
 
         # if (solver.phi_L(assigns) <= 0) and (solver.phi_U(assigns) <= 0):
         #     solver.v_t = 0
-        if _%2000 == 0:
+        if _%5000 == 0:
             print('Max iterations reached')
             solver.v_t = 0
         solver.update_thetas(assigns)
