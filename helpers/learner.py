@@ -1,6 +1,6 @@
 import copy
 from sklearn import linear_model
-from reg_oracle import RegOracle
+from helpers.reg_oracle import RegOracle
 # This class sourced from the gerryfair repo
 
 class Learner:
