@@ -1,6 +1,6 @@
-from lime_exp_func import LimeExpFunc
-from shap_exp_func import ShapExpFunc
-from grad_exp_func import GradExpFunc
+from notions.lime_exp_func import LimeExpFunc
+from notions.shap_exp_func import ShapExpFunc
+from notions.grad_exp_func import GradExpFunc
 from sklearn.ensemble import RandomForestClassifier
 import sklearn
 from sklearn.model_selection import train_test_split

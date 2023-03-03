@@ -1,9 +1,7 @@
 /venv/*
 ./idea/*
 *.csv
-*.txt
 sandbox*
 dummy*
 *nohup*
-output*
 plots*
