@@ -15,8 +15,8 @@ all examples of separable notions.
 ### Pre-processing Data (Recommended)
 
 To enable repeat analysis, we recommend pre-processing the importance values that your explanation model provides.
-Using process_exps.py, input your dataset, classifier/regression model, and model explanation method.
-LIME, SHAP, and Gradient are already implemented.
+Using process_exps.py, input your dataset, classifier/regression model, and model explanation method (must be implemented
+in a class similar to that available to those already in notions directory). LIME, SHAP, and Gradient are already implemented.
 
 The resulting data will be output in a json format that can be read in during the initial phase of the optimization.
 
@@ -25,12 +25,16 @@ the results from experiment to experiment.
 
 ### Running Constrained Optimization Algorithm
 
-In the constrained_opt.py script, input the dataset of interest, specifying the target feature, train/test split,
-and sensitive features. You may also adjust the desired $\alpha$ range. Run the script using:
+The main code for the script is available in constrained_opt.py script. Use run_separable.py to specify parameters
+such as dataset, target feature, sensitive features, importance notion, and alpha range and to run the algorithm.
 
-'''
-python constrained_opy.py <importance notion>
-'''
+#### Note on hyperparameters
+
+Depending on your use case, you may need to modify hyperparameters to ensure smooth convergence. Within constrained_opt.py,
+argmin_g can be modified to fit your uses. $v$ controls the error tolerance of the algorithm.
+
+The maximum iterations limit can also be set to prevent degenerate cases.
+
 
 ## Non-Separable Case
 
