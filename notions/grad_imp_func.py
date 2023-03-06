@@ -8,32 +8,32 @@ class GradImpFunc:
         self.classifier = classifier
         self.X = X
         self.y = y
-        self.exps = []
+        self.imps = []
         self.seed = seed
 
     # Populate importances
-    # exps[n][i] returns expressivity of feature i in datapoint n
-    def populate_exps(self):
+    # imps[n][i] returns importance of feature i in datapoint n
+    def populate_imps(self):
         print("Not implemented here yet")
-        exp_method = openxai.Explainer(method='grad', model=self.classifier, dataset_tensor=torch.from_numpy(self.X))
-        explanations = exp_method.get_explanation(self.X, torch.from_numpy(self.y).long())
+        imp_method = openxai.Explainer(method='grad', model=self.classifier, dataset_tensor=torch.from_numpy(self.X))
+        explanations = imp_method.get_explanation(self.X, torch.from_numpy(self.y).long())
         explanation_values = explanations.numpy()
         for row in explanation_values:
-            exp_dict = {}
+            imp_dict = {}
             for i in range(len(row)):
-                exp_dict[i] = np.float64(row[i])
-            self.exps.append(exp_dict)
+                imp_dict[i] = np.float64(row[i])
+            self.imps.append(imp_dict)
         pass
 
-    # Given feature and row, return the computed expressivities
-    def get_exp(self, row, feature):
-        if len(self.exps) == 0:
-            print("Expressivity dict empty. Populating now...")
-            self.populate_exps()
-        return self.exps[row][feature]
+    # Given feature and row, return the computed importance
+    def get_imp(self, row, feature):
+        if len(self.imps) == 0:
+            print("Importance dict empty. Populating now...")
+            self.populate_imps()
+        return self.imps[row][feature]
 
-    def get_total_exp(self, assigns, feature_num):
-        total_expressivity = 0
+    def get_total_imp(self, assigns, feature_num):
+        total_importance = 0
         for i in range(len(assigns)):
-            total_expressivity += assigns[i] * self.exps[i][feature_num]
-        return total_expressivity
+            total_importance += assigns[i] * self.imps[i][feature_num]
+        return total_importance

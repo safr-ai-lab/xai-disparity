@@ -1,31 +1,32 @@
 import shap
 
 class ShapImpFunc:
-    def __init__(self, classifier, dataset, seed):
+    def __init__(self, classifier, X, y, seed):
         self.classifier = classifier
-        self.dataset = dataset
-        self.exps = []
-        self.explainer = shap.Explainer(classifier.predict, dataset, seed=seed)
+        self.X = X
+        self.y = y
+        self.imps = []
+        self.explainer = shap.Explainer(classifier.predict, X, seed=seed)
 
-    # Populate exps with expressivity dictionaries
-    # exps[n][i] returns expressivity of feature i in datapoint n
-    def populate_exps(self):
-        shap_values = self.explainer(self.dataset)
+    # Populate imps with importance dictionaries
+    # imps[n][i] returns importance of feature i in datapoint n
+    def populate_imps(self):
+        shap_values = self.explainer(self.X)
         for row in shap_values.values:
-            exp_dict = {}
+            imp_dict = {}
             for i in range(len(row)):
-                exp_dict[i] = row[i]
-            self.exps.append(exp_dict)
+                imp_dict[i] = row[i]
+            self.imps.append(imp_dict)
 
-    # Given feature and row, return the computed expressivities
-    def get_exp(self, row, feature):
-        if len(self.exps) == 0:
-            print("Expressivity dict empty. Populating now...")
-            self.populate_exps()
-        return self.exps[row][feature]
+    # Given feature and row, return the computed importance
+    def get_imp(self, row, feature):
+        if len(self.imps) == 0:
+            print("importance dict empty. Populating now...")
+            self.populate_imps()
+        return self.imps[row][feature]
 
-    def get_total_exp(self, assigns, feature_num):
-        total_expressivity = 0
+    def get_total_imp(self, assigns, feature_num):
+        total_importance = 0
         for i in range(len(assigns)):
-            total_expressivity += assigns[i] * self.exps[i][feature_num]
-        return total_expressivity
+            total_importance += assigns[i] * self.imps[i][feature_num]
+        return total_importance
