@@ -1,21 +1,29 @@
-import shap
+import openxai
+import torch
+import torch.nn as nn
+import numpy as np
 
-class ShapExpFunc:
-    def __init__(self, classifier, dataset, seed):
+class GradImpFunc:
+    def __init__(self, classifier, X, y, seed):
         self.classifier = classifier
-        self.dataset = dataset
+        self.X = X
+        self.y = y
         self.exps = []
-        self.explainer = shap.Explainer(classifier.predict, dataset, seed=seed)
+        self.seed = seed
 
-    # Populate exps with expressivity dictionaries
+    # Populate importances
     # exps[n][i] returns expressivity of feature i in datapoint n
     def populate_exps(self):
-        shap_values = self.explainer(self.dataset)
-        for row in shap_values.values:
+        print("Not implemented here yet")
+        exp_method = openxai.Explainer(method='grad', model=self.classifier, dataset_tensor=torch.from_numpy(self.X))
+        explanations = exp_method.get_explanation(self.X, torch.from_numpy(self.y).long())
+        explanation_values = explanations.numpy()
+        for row in explanation_values:
             exp_dict = {}
             for i in range(len(row)):
-                exp_dict[i] = row[i]
+                exp_dict[i] = np.float64(row[i])
             self.exps.append(exp_dict)
+        pass
 
     # Given feature and row, return the computed expressivities
     def get_exp(self, row, feature):

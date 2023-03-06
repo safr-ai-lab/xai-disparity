@@ -1,6 +1,6 @@
-from notions.lime_exp_func import LimeExpFunc
-from notions.shap_exp_func import ShapExpFunc
-from notions.grad_exp_func import GradExpFunc
+from notions.lime_exp_func import LimeImpFunc
+from notions.shap_exp_func import ShapImpFunc
+from notions.grad_exp_func import GradImpFunc
 from helpers.constrained_solver import ConstrainedSolver
 from helpers.learner import Learner
 from sklearn import linear_model
@@ -24,11 +24,11 @@ exp_method = args.exp_method
 dummy = args.dummy
 
 if exp_method == 'lime':
-    expFunc = LimeExpFunc
+    expFunc = LimeImpFunc
 elif exp_method == 'shap':
-    expFunc = ShapExpFunc
+    expFunc = ShapImpFunc
 elif exp_method == 'grad':
-    expFunc = GradExpFunc
+    expFunc = GradImpFunc
 else:
     sys.exit('Exp method not recognized')
 
