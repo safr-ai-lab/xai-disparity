@@ -3,7 +3,7 @@
 This repo examines datasets to identify subgroups that are treated differently by a classification or regression model
 compared to the whole dataset.
 
-The paper describing the methodology in depth is available at INSERT LINK HERE.
+The pre-print describing the methodology in depth is available on [Arxiv](https://arxiv.org/abs/2303.01704).
 
 
 ## Locally Separable Important Notions
@@ -34,19 +34,18 @@ python constrained_opy.py <importance notion>
 
 ## Non-Separable Case
 
-In the constrained_opt.py script, input the dataset of interest, specifying the target feature, train/test split,
-and sensitive features. You may also adjust the desired $\alpha$ range. Run the script using:
+linearexpressivity.py contains the primary code used for this. Use run_linear.py to specify parameters
+such as dataset, target feature, sensitive features, and alpha range and to run the algorithm.
+
+The optional flag --cuda can be used to enable gpu processing. This is highly recommended for speed purposes.
 
 
-'''
-python linearexpressivity.py <flat value>
-'''
+#### Note on flat_val
 
-Where <flat value> is the regularization constant to prevent exploding gradients in the optimization
+flat_val is the regularization constant to prevent exploding gradients in the optimization
 process. For smaller datasets ($<10k$ data points), this value can be set around $.0001$. For larger
 datasets, this value may need to be larger.
 
-The optional flag --cuda can be used to enable gpu processing. This is highly recommended for speed purposes.
 
 ## Datasets
 
