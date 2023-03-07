@@ -43,43 +43,11 @@ def split_out_dataset(dataset, target_column):
     #sensitive_ds = dataset[f_sensitive].to_numpy()
     return x, y
 
-# df = pd.read_csv('data/student/student_cleaned.csv')
-# target = 'G3'
-# t_split = .5
-# sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
-# df_name = 'student'
-
-df = pd.read_csv('data/compas/compas_recid.csv')
-target = 'two_year_recid'
+df = pd.read_csv('data/student/student_cleaned.csv')
+target = 'G3'
 t_split = .5
-sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-df_name = 'compas_recid'
-
-# df = pd.read_csv('data/compas/compas_cleaned_decile.csv')
-# target = 'decile_score'
-# t_split = .5
-# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-# df_name = 'compas_decile'
-
-# df = pd.read_csv('data/compas/compas_decile_stripped.csv')
-# target = 'decile_score'
-# t_split = .5
-# sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
-# df_name = 'compas_decile'
-
-# df = BankDataset().convert_to_dataframe()[0]
-# target = 'y'
-# t_split = .5
-# sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
-# df_name = 'bank'
-
-# df = pd.read_csv('data/folktables/ACSIncome_MI_2018_new.csv')
-# target = 'PINCP'
-# t_split = .5
-# sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
-#                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
-# df_name = 'folktables'
-
+sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
+df_name = 'student'
 
 print('starting', df_name)
 new_cols = [col for col in df.columns if col != target] + [target]

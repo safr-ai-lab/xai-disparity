@@ -1,9 +1,32 @@
 # Model Explanation Disparities
 
-This repo examines datasets to identify subgroups that are treated differently by a classification or regression model
-compared to the whole dataset.
+This repo evaluates classifier/regression models to identify rich subgroups of the dataset that have
+Feature Importance Disparities (FID). This is when the importance of a certain feature, as measured
+by a chosen importance metric such as LIME, is substantially different on the subgroup versus on the
+whole dataset. While testing this for subgroups identified by a singular sensitive characteristic
+is a straightforward problem, we search the exponentially large space of "rich" subgroups, which can
+be defined by a function of the sensitive characteristics.
 
-The pre-print describing the methodology in depth is available on [Arxiv](https://arxiv.org/abs/2303.01704).
+For further breakdown of the methodology and background, see the pre-print on [Arxiv](https://arxiv.org/abs/2303.01704).
+
+This repo contains code to:
+
+- Identify high FID subgroups using "separable" importance notions (such as LIME).
+- Identify high FID subgroups using "nonseparable" importance notions (such as linear regression coefficients).
+- Compute feature importance values for the LIME, SHAP, and Gradient notions.
+- Search the marginal subgroup space for high FID subgroups.
+
+
+#### Prerequisites
+
+To clone and run, do:
+
+```
+git clone https://github.com/safr-ml-lab/xai-disparity.git
+pip install -r requirements.txt
+```
+
+TODO: Implement example notebook
 
 
 ## Locally Separable Important Notions
@@ -25,8 +48,14 @@ the results from experiment to experiment.
 
 ### Running Constrained Optimization Algorithm
 
-The main code for the script is available in constrained_opt.py script. Use run_separable.py to specify parameters
-such as dataset, target feature, sensitive features, importance notion, and alpha range and to run the algorithm.
+The main code for the script is available in constrained_opt.py script. In run_separable.py, specify parameters
+such as dataset, target feature, sensitive features, and alpha range. Run the code using:
+
+```
+python run_separable.py <importance notion>
+```
+
+Specifying the importance notion flag to read the pre-computed values (or to compute the values on the spot).
 
 #### Note on hyperparameters
 
@@ -38,8 +67,12 @@ The maximum iterations limit can also be set to prevent degenerate cases.
 
 ## Non-Separable Case
 
-linearexpressivity.py contains the primary code used for this. Use run_linear.py to specify parameters
-such as dataset, target feature, sensitive features, and alpha range and to run the algorithm.
+linearexpressivity.py contains the primary code used for this. In run_linear.py, specify parameters
+such as dataset, target feature, sensitive features, and alpha range. Run the code using:
+
+```
+python run_linear.py
+```
 
 The optional flag --cuda can be used to enable gpu processing. This is highly recommended for speed purposes.
 
@@ -53,5 +86,19 @@ datasets, this value may need to be larger.
 
 ## Datasets
 
-Our initial analysis was performed on four datasets: COMPAS, Student, Bank, and Folktables (MI Income).
-See datasets.ipynb for descriptions of the datasets and links for downloading the data.
+Our experiments were performed on four datasets:
+
+- Student: predicting student final math grades using personal and academic records.
+- COMPAS: predicting recidivism risk for pre-trail criminal defendants
+- Bank: predicting whether an individual would sign up for a bank account
+- Folktables (ACSIncome): predicting whether an individual makes more than 50,000 dollars.
+
+See [input/datasets.ipynb](https://github.com/safr-ml-lab/xai-disparity/blob/master/input/datasets.ipynb)
+for further descriptions of the datasets and links for downloading the data.
+
+
+## Contact
+
+- Repo maintained by Peter Chang <pchang@hbs.edu> 
+- Property of SAFR ML Lab, $D^3$ Institute, Harvard Business School. PI: Seth Neel <sneel@hbs.edu>
+- Contributors: Peter Chang, Leor Fishman <leor.fishman@gmail.com>, and Seth Neel
