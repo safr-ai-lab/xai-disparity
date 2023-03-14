@@ -17,11 +17,12 @@ class SeparableSolver:
         np.random.seed(seed)
 
     # Executes iterative CSC solve for a given feature
-    def argmin_g(self, feature_num, minimize):
+    def argmin_g(self, feature_num, nu, c_B, c_v, minimize):
         imp_order = np.mean([abs(self.imp_func_train.imps[i][feature_num]) for i in range(len(self.x_train))])+.001
         size_reg = len(self.x_train)*np.mean(self.alphas)
-        solver = ConstrainedSolver(self.imp_func_train, alpha_L=self.alphas[0], alpha_U=self.alphas[1], B=10000*imp_order, nu=.00001)
-        v = .05*imp_order*size_reg
+        solver = ConstrainedSolver(self.imp_func_train, alpha_L=self.alphas[0], alpha_U=self.alphas[1],
+                                   B=c_B*imp_order, nu=nu)
+        v = c_v*imp_order*size_reg
         print('imp order:', imp_order, v)
 
         x_sensitive = self.x_train[:, self.f_sensitive]
@@ -80,7 +81,7 @@ class SeparableSolver:
         return total
 
     # Iterate through all features, find min/max subgroups, choose largest FID subgroup
-    def extremize_imps_dataset(self):
+    def extremize_imps_dataset(self, nu, c_B, c_v):
         out_df = pd.DataFrame()
         for feature_num in range(len(self.x_train[0])):
             print('*****************')
@@ -88,11 +89,11 @@ class SeparableSolver:
             total_imp_train = self.full_dataset_importance(self.imp_func_train, feature_num)
             print('total imp: ', total_imp_train)
 
-            min_solver = self.argmin_g(feature_num, minimize=True)
+            min_solver = self.argmin_g(feature_num, nu, c_B, c_v, minimize=True)
             min_model, min_assigns, min_imp = min_solver.get_best_valid_model(minimize=True)
             print('min imp', min_imp, '| size', np.mean(min_assigns))
 
-            max_solver = self.argmin_g(feature_num, minimize=False)
+            max_solver = self.argmin_g(feature_num, nu, c_B, c_v, minimize=False)
             max_model, max_assigns, max_imp = max_solver.get_best_valid_model(minimize=False)
             print('max imp', max_imp, '| size', np.mean(max_assigns))
 

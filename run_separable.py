@@ -55,8 +55,11 @@ x_test, y_test = split_out_dataset(test_df, target)
 classifier = RandomForestClassifier(random_state=seed)
 classifier.fit(x_train, y_train)
 
-# User: Define alpha range here
+# User: Define alpha range and hyperparameters here
 a = [.01, .05]
+nu = .00001
+c_B = 10000
+c_v = .05
 
 
 # Read in importances file if specified, else compute importances
@@ -89,7 +92,7 @@ print("Running", df_name, ", Alphas =", a)
 start = time.time()
 solver = SeparableSolver(df, (x_train, y_train), (x_test, y_test), imp_func_train, imp_func_test,
                          f_sensitive, a, seed)
-final_df = solver.extremize_imps_dataset()
+final_df = solver.extremize_imps_dataset(nu=nu, c_B=c_B, c_v=c_v)
 print("Runtime:", '%.2f' % ((time.time() - start) / 3600), "Hours")
 date = datetime.today().strftime('%m_%d')
 final_df.to_csv(f'output/{df_name}_{imp_method}_output_{date}_alpha{a}.csv')

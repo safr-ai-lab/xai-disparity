@@ -64,7 +64,7 @@ the problem including dataset, classifier, alpha range, and parameters. If you p
 without the "train/test" string. e.g. "input/imps/student_lime_seed0". Run the code using:
 
 ```
-python run_separable.py <importance notion> [importance file]
+python run_separable.py --method <importance notion> --file [importance file]
 ```
 
 If you did not pre-process your importances, this script will save a json file to input/imps while running.
