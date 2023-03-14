@@ -26,7 +26,12 @@ git clone https://github.com/safr-ml-lab/xai-disparity.git
 pip install -r requirements.txt
 ```
 
-TODO: Implement example notebook
+#### A Note on Datasets
+
+All feature variables must be either continuous or binary. If you have categorical variables, we recommend one-hot
+encoding.
+
+If you are using Vanilla Gradient as your importance notion, your dataset must have a binary target column.
 
 
 ## Locally Separable Important Notions
@@ -37,9 +42,15 @@ all examples of separable notions.
 
 ### Pre-processing Data (Recommended)
 
-To enable repeat analysis, we recommend pre-processing the importance values that your explanation model provides.
-Using process_exps.py, input your dataset, classifier/regression model, and model explanation method (must be implemented
-in a class similar to that available to those already in notions directory). LIME, SHAP, and Gradient are already implemented.
+To enable repeat analysis, we highly recommend pre-processing the importance values that your explanation model provides.
+This can be done using the process_imps.py script. LIME, SHAP, and Vanilla Gradient are already implemented and can be specified
+during execution. If you are using a different importance notion, you must implement a new module (see notions/ for examples).
+
+Within process_imps.py, specify your dataset and also input the classifier/regression model being used. Run using:
+
+```
+python process_imps.py <importance notion>
+```
 
 The resulting data will be output in a json format that can be read in during the initial phase of the optimization.
 
@@ -48,14 +59,16 @@ the results from experiment to experiment.
 
 ### Running Constrained Optimization Algorithm
 
-The main code for the script is available in constrained_opt.py script. In run_separable.py, specify parameters
-such as dataset, target feature, sensitive features, and alpha range. Run the code using:
+The main code for the script is available in constrained_opt.py script. In run_separable.py, you specify the details of
+the problem including dataset, classifier, alpha range, and parameters. If you pre-processed your importances, specify the file name
+without the "train/test" string. e.g. "input/imps/student_lime_seed0". Run the code using:
 
 ```
-python run_separable.py <importance notion>
+python run_separable.py <importance notion> [importance file]
 ```
 
-Specifying the importance notion flag to read the pre-computed values (or to compute the values on the spot).
+If you did not pre-process your importances, this script will save a json file to input/imps while running.
+
 
 #### Note on hyperparameters
 
