@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 import ast
 import matplotlib.pyplot as plt
@@ -84,29 +85,31 @@ def clean_nonsep(df):
 # t_split = .5
 # sensitive_features = ['sex_M', 'Pstatus_T', 'address_U', 'Dalc', 'Walc', 'health']
 
-#out_df = clean_sep(pd.read_csv('../output/02_16/compas_recid_lime_output.csv'))
-#out_df = clean_sep(pd.read_csv('../output/02_16/compas_recid_shap_output.csv'))
-#out_df = clean_sep(pd.read_csv('../output/separable/final/compas_recid_gradLR_output.csv'))
-# out_df = clean_nonsep(pd.read_csv('../output/nonseparable/final/compas_recid_output.csv'))
+# out_df = clean_sep(pd.read_csv('../output/02_16/compas_recid_lime_output.csv'))
+# #out_df = clean_sep(pd.read_csv('../output/02_16/compas_recid_shap_output.csv'))
+# #out_df = clean_sep(pd.read_csv('../output/separable/final/compas_recid_gradLR_output.csv'))
+# #out_df = clean_nonsep(pd.read_csv('../output/nonseparable/final/compas_recid_output.csv'))
 # df = pd.read_csv('../data/compas/compas_recid.csv')
 # target = 'two_year_recid'
 # t_split = .2
 # sensitive_features = ['age','sex_Male','race_African-American','race_Asian','race_Caucasian','race_Hispanic','race_Native American','race_Other']
 
-# out_df = clean_sep(pd.read_csv('../output/02_10/bank_lime_output.csv'))
-# df = BankDataset().convert_to_dataframe()[0]
-# target = 'y'
-# t_split = .2
-# sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
-
-#out_df = clean_sep(pd.read_csv('../output/02_10/folktables_lime_output.csv'))
-out_df = clean_sep(pd.read_csv('../output/02_16/folktables_shap_output.csv'))
-# out_df = clean_nonsep(pd.read_csv('../output/nonseparable/final/folktables_output.csv'))
-df = pd.read_csv('../data/folktables/ACSIncome_MI_2018_new.csv')
-target = 'PINCP'
+out_df = clean_sep(pd.read_csv('../output/02_10/bank_lime_output.csv'))
+out_df = clean_sep(pd.read_csv('../output/02_10/bank_shap_output.csv'))
+#df = BankDataset().convert_to_dataframe()[0]
+df = pd.read_csv('../data/bank.csv')
+target = 'y'
 t_split = .2
-sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
-                      'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
+sensitive_features = ['age', 'marital=married', 'marital=single', 'marital=divorced']
+
+# out_df = clean_sep(pd.read_csv('../output/02_10/folktables_lime_output.csv'))
+# #out_df = clean_sep(pd.read_csv('../output/02_16/folktables_shap_output.csv'))
+# # # out_df = clean_nonsep(pd.read_csv('../output/nonseparable/final/folktables_output.csv'))
+# df = pd.read_csv('../data/folktables/ACSIncome_MI_2018_new.csv')
+# target = 'PINCP'
+# t_split = .2
+# sensitive_features = ['AGEP', 'SEX', 'MAR_1.0', 'MAR_2.0', 'MAR_3.0', 'MAR_4.0', 'MAR_5.0', 'RAC1P_1.0', 'RAC1P_2.0',
+#                       'RAC1P_3.0', 'RAC1P_4.0', 'RAC1P_5.0', 'RAC1P_6.0', 'RAC1P_7.0', 'RAC1P_8.0', 'RAC1P_9.0']
 
 new_cols = [col for col in df.columns if col != target] + [target]
 df = df[new_cols]
@@ -118,6 +121,8 @@ train_df, test_df = train_test_split(df, test_size=t_split, random_state=seed)
 x_train, y_train = split_out_dataset(train_df, target)
 classifier = RandomForestClassifier(random_state=seed)
 classifier.fit(x_train, y_train)
+# classifier = LogisticRegression(random_state=seed, max_iter=1000)
+# classifier.fit(x_train, y_train)
 
 print(out_df.iloc[k]['Feature'])
 #g = ast.literal_eval(out_df.iloc[k]['Subgroup Coefficients'])
@@ -168,8 +173,8 @@ for r in ranges:
 
 print("DELTAS")
 print("Y=1 diff:", sum(classifier.predict(gx_test))/length_g - sum(classifier.predict(x_test))/length_full)
-print("TPR diff:", gtp/length_g - tp/length_full)
-print("FPR diff:", gfp/length_g - fp/length_full)
+print("TPR diff:", gtp/(gtp+gfn) - tp/(tp+fn))
+print("FPR diff:", gfp/(gfp+gtn) - fp/(fp+tn))
 print("ECE diff:", gece-ece)
 
 # x_ticks = [(x[0]+x[1])/2 for x in ranges]

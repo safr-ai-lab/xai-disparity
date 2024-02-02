@@ -46,7 +46,7 @@ class SeparableSolver:
 
             assigns, cost = l_response.predict(x_sensitive)
             importance = self.imp_func_train.get_total_imp(assigns, feature_num)
-            solver.pred_history.append(np.array(assigns))
+            solver.pred_history.append(assigns)
             solver.size_history.append(np.mean(assigns))
             solver.imp_history.append(importance)
 
@@ -57,7 +57,7 @@ class SeparableSolver:
                 print("ITERATION NUMBER ", _, "time:", time.time()-start2)
                 print(np.mean(assigns))
 
-            if _%5000 == 0:
+            if _%100 == 0:
                 print('Max iterations reached')
                 solver.v_t = 0
             solver.update_thetas(assigns)
@@ -104,12 +104,16 @@ class SeparableSolver:
                 best_model = max_model
                 best_solver = max_solver
                 direction = 'maximize'
+
+                assign_history = max_solver.pred_history
             else:
                 furthest_imp_train = min_imp
                 assigns_train = min_assigns
                 best_model = min_model
                 best_solver = min_solver
                 direction = 'minimize'
+
+                assign_history = min_solver.pred_history
             subgroup_size_train = np.mean(assigns_train)
 
             # compute test values
@@ -121,6 +125,9 @@ class SeparableSolver:
             furthest_imp_test = 0
             for i in range(len(assigns_test)):
                 furthest_imp_test += assigns_test[i]*self.imp_func_test.imps[i][feature_num]
+
+            # TODO: temporary
+            assign_history.append(assigns_test)
 
             # # from mix models, pick model with largest imp diff that is valid
             params = best_model.b1.coef_
@@ -148,6 +155,7 @@ class SeparableSolver:
                                                             'Percent Change_train': 100*abs(furthest_imp_train-total_imp_train)/
                                                                                     (abs(total_imp_train) + .000001),
                                                             'Subgroup Size_train': subgroup_size_train,
+                                                            'assigns history': assign_history,
                                                             'size history': best_solver.size_history,
                                                             'lambda history': best_solver.lambda_history,
                                                             'imp history': best_solver.imp_history,

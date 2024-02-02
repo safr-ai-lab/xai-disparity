@@ -4,4 +4,12 @@
 sandbox*
 dummy*
 *nohup*
-plots*
+*plots*
+*test*
+*.png
+*.ipynb
+!input/datasets.ipynb
+supplementary_material*
+GerryFair/
+openxai/
+pretrained/
